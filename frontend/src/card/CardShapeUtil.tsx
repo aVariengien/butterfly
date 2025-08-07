@@ -12,8 +12,8 @@ import { ICardShape } from './card-shape-types'
 import { Paper, TextInput, Textarea, Button, Collapse, Image, ScrollArea } from '@mantine/core'
 import { CardTypeToColors, CardTypeToLayout } from './card-config'
 import { getSelectedCardType } from './card-state'
-import classes from './card.module.css'
-import { useSessionContext } from './contexts/SessionContext'
+import classes from '../styles/card.module.css'
+import { useSessionContext } from '../contexts/SessionContext'
 
 // Session start time for consistent timestamp calculation
 const SESSION_START_TIME = Date.now()

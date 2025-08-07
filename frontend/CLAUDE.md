@@ -30,7 +30,6 @@ Each custom shape requires 4 files:
 
 ### Key Integration Points
 
-- **UI Overrides** (`ui-overrides.tsx`): Adds custom tools to tldraw toolbar with keyboard shortcuts
 - **Shape Registration**: Custom shapes/tools arrays passed to Tldraw component
 - **Mantine Integration**: Uses `@mantine/core` components within HTMLContainer for styled UI
 

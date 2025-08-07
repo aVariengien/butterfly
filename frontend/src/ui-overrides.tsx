@@ -12,9 +12,9 @@ import {
 	useEditor,
 } from 'tldraw'
 import { SegmentedControl } from '@mantine/core'
-import { CardType } from './card-shape-types'
-import { CardTypeToLayout } from './card-config'
-import { getSelectedCardType, setSelectedCardType } from './card-state'
+import { CardType } from './card/card-shape-types'
+import { CardTypeToLayout } from './card/card-config'
+import { getSelectedCardType, setSelectedCardType } from './card/card-state'
 
 // There's a guide at the bottom of this file!
 
