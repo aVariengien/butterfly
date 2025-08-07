@@ -114,7 +114,7 @@ export class CardShapeUtil extends ShapeUtil<ICardShape> {
 		const { sessionEnded, selectedCards, onCardSelect } = sessionContext
 		const isSelected = selectedCards.has(shape.id)
 		const isSessionEndMode = sessionEnded && isActivePage // Don't apply session end logic to validation cards
-		const handleTitleChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+		const handleTitleChange = (event: React.ChangeEvent<HTMLTextAreaElement>) => {
 			if (isSessionEndMode || isHistoryView) return // Disable editing during session end
 			this.editor.updateShape<ICardShape>({
 				id: shape.id,
@@ -303,7 +303,7 @@ export class CardShapeUtil extends ShapeUtil<ICardShape> {
 					<div style={{ padding: '12px', flex: 1, display: 'flex', flexDirection: 'column' }}>
 						{/* Title */}
 						{layout.title && (
-							<TextInput
+							<Textarea
 								size="lg"
 								fw={700}
 								mt={0}
@@ -313,12 +313,17 @@ export class CardShapeUtil extends ShapeUtil<ICardShape> {
 								onChange={handleTitleChange}
 								onPointerDown={(e) => e.stopPropagation()}
 								readOnly={(isSessionEndMode || isHistoryView)}
+								minRows={1}
+								autosize
 								styles={{
 									input: {
 										fontSize: '1.2rem',
 										fontWeight: 700,
 										padding: 0,
 										cursor: (isSessionEndMode || isHistoryView) ? 'pointer' : 'text',
+										resize: 'none',
+										wordWrap: 'break-word',
+										whiteSpace: 'pre-wrap',
 									}
 								}}
 							/>
