@@ -114,15 +114,6 @@ export class CardShapeUtil extends ShapeUtil<ICardShape> {
 		const { sessionEnded, selectedCards, onCardSelect } = sessionContext
 		const isSelected = selectedCards.has(shape.id)
 		const isSessionEndMode = sessionEnded && isActivePage // Don't apply session end logic to validation cards
-		
-
-		console.log("history view", isHistoryView);
-		console.log("session end mode", isSessionEndMode)
-		console.log("session ended", sessionEnded)
-		console.log("isActive", isActivePage)
-
-
-
 		const handleTitleChange = (event: React.ChangeEvent<HTMLInputElement>) => {
 			if (isSessionEndMode || isHistoryView) return // Disable editing during session end
 			this.editor.updateShape<ICardShape>({

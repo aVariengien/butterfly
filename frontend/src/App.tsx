@@ -10,7 +10,7 @@ import { CardType } from './card-shape-types'
 import { CardTypeToLayout } from './card-config'
 import { SessionEndOverlay } from './components/SessionEndOverlay'
 import { SessionProvider } from './contexts/SessionContext'
-import { uiOverrides, components } from './ui-overrides'
+import { components } from './ui-overrides'
 
 // There's a guide at the bottom of this file!
 
@@ -587,23 +587,40 @@ export default function CustomConfigExample() {
 				const shapeId = createShapeId(newCard.id)
 				const creationTime = Math.floor((Date.now() - SESSION_START_TIME) / 1000)
 				
-				editor.createShapes([{
-					id: shapeId,
-					type: 'card',
-					x: newCard.x,
-					y: newCard.y,
-					props: {
-						w: newCard.w,
-						h: newCard.h,
-						title: newCard.title,
-						body: newCard.body,
-						image: newCard.image || '',
-						details: newCard.details || '',
-						card_type: newCard.card_type,
-						toValidate: true, // Mark card for validation
-						createdAt: newCard.createdAt || creationTime,
-					},
-				}])
+				// Store current page to restore later
+				const currentPageId = editor.getCurrentPageId()
+				
+				// Find and switch to Active page
+				const pages = editor.getPages()
+				const activePage = pages.find(page => page.name === 'Active')
+				
+				if (activePage) {
+					editor.setCurrentPage(activePage.id)
+					
+					// Create the card on Active page
+					editor.createShapes([{
+						id: shapeId,
+						type: 'card',
+						x: newCard.x,
+						y: newCard.y,
+						props: {
+							w: newCard.w,
+							h: newCard.h,
+							title: newCard.title,
+							body: newCard.body,
+							image: newCard.image || '',
+							details: newCard.details || '',
+							card_type: newCard.card_type,
+							toValidate: true, // Mark card for validation
+							createdAt: newCard.createdAt || creationTime,
+						},
+					}])
+					
+					// Switch back to the original page
+					editor.setCurrentPage(currentPageId)
+					
+					console.log('Card created on Active page while viewing:', editor.getPages().find(page => page.id === currentPageId)?.name)
+				}
 			}
 		} finally {
 			setIsGenerating(false)
@@ -620,7 +637,7 @@ export default function CustomConfigExample() {
 				console.log("session ended", sessionEnded);
 				triggerCardGeneration()
 			}
-		}, 100000000) // long timer to deactivate for now
+		}, 10000) // long timer to deactivate for now
 
 		return () => clearInterval(interval)
 	}, [editor, triggerCardGeneration, getValidationCardsCount])
@@ -652,12 +669,14 @@ export default function CustomConfigExample() {
 			const currentPageId = editor.getCurrentPageId()
 			const currentPage = editor.getPages().find(page => page.id === currentPageId)
 			const isHistoryView = currentPage && currentPage.name === "History"
-			
+		
 			// Prevent all double-click behavior in History view or during session end
 			if (isHistoryView || sessionEnded) {
 				e.stopPropagation()
 				e.preventDefault()
 				e.stopImmediatePropagation()
+				editor.setCurrentTool("hand");
+				editor.setCurrentTool("select");
 				return
 			}
 			
@@ -665,6 +684,17 @@ export default function CustomConfigExample() {
 			e.stopPropagation()
 			e.preventDefault()
 			e.stopImmediatePropagation()
+
+
+			// Scan and delete all text shapes on Active page
+			const shapes = editor.getCurrentPageShapes()
+			const textShapes = shapes.filter(shape => shape.type === 'text')
+			if (textShapes.length > 0) {
+				editor.deleteShapes(textShapes.map(shape => shape.id))
+				console.log(`Deleted ${textShapes.length} text shapes from Active page`)
+			}
+
+
 			// Convert screen coordinates to world coordinates
 			const pagePoint = editor.screenToPage({ x: e.clientX, y: e.clientY })
 			
@@ -739,33 +769,30 @@ export default function CustomConfigExample() {
 		}
 	}, [editor, sessionEnded])
 
-	// Handle tool restrictions based on current page
+	//block translation in History view
 	useEffect(() => {
 		if (!editor) return
-
-		const updateToolsBasedOnPage = () => {
+		const currentToolId = editor.getCurrentToolId();
+		const checkAndRestrictTools = () => {
 			const currentPageId = editor.getCurrentPageId()
 			const currentPage = editor.getPages().find(page => page.id === currentPageId)
 			const isHistoryView = currentPage && currentPage.name === "History"
-			
-			if (isHistoryView) {
-				// Force select tool in History view and prevent text tool
-				const currentTool = editor.getCurrentTool()
-				if (currentTool.id === 'text' || currentTool.id === 'draw' || currentTool.id === 'arrow' || currentTool.id === 'line') {
-					editor.setCurrentTool('select')
-				}
+			// console.log("current tool hey", editor.getPath());
+			// If text tool (or other restricted tools) is active in History view, switch to select
+			if ( editor.isIn('select.translating') && isHistoryView) { //potentially add more state here
+				editor.setCurrentTool('hand');
+				editor.setCurrentTool('select');
+				editor.undo();
 			}
 		}
 
-		// Update tools when page changes
-		const unsubscribe = editor.store.listen((record) => {
-			if (record.changes.added['page:page'] || record.changes.updated['page:page']) {
-				updateToolsBasedOnPage()
-			}
+		// Listen to all store changes to catch tool changes
+		const unsubscribe = editor.store.listen(() => {
+			checkAndRestrictTools()
 		})
 
-		// Update tools immediately
-		updateToolsBasedOnPage()
+		// Check immediately
+		checkAndRestrictTools()
 
 		return unsubscribe
 	}, [editor])
@@ -797,7 +824,6 @@ export default function CustomConfigExample() {
 					>
 						<Tldraw
 							shapeUtils={customShapeUtils}
-							overrides={uiOverrides}
 							components={components}
 							onMount={(editorInstance: Editor) => {
 								setEditor(editorInstance)
