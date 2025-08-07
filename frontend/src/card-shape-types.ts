@@ -1,8 +1,8 @@
 import { TLBaseShape, TLDefaultColorStyle } from 'tldraw'
 import { T } from 'tldraw'
 // Card type definitions
-export type CardType = 'example' | 'question' | 'idea'
-export const TCardType = T.literalEnum('example', 'question', 'idea')
+export type CardType = string
+export const TCardType = T.string
 // A type for our custom card shape
 export type ICardShape = TLBaseShape<
 	'card',
@@ -14,6 +14,8 @@ export type ICardShape = TLBaseShape<
 		body: string,
 		image?: string, // base64 image data
 		details?: string, // expandable details text
-		card_type: CardType,
+		card_type: string,
+		toValidate?: boolean, // flag to show accept/reject buttons
+		createdAt?: number, // seconds since session start
 	}
 >

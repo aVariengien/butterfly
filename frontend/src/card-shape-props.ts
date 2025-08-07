@@ -12,4 +12,6 @@ export const cardShapeProps: RecordProps<ICardShape> = {
 	image: T.optional(T.string),
 	details: T.optional(T.string),
 	card_type: TCardType,
+	toValidate: T.optional(T.boolean),
+	createdAt: T.optional(T.number),
 }

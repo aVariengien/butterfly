@@ -1,0 +1,37 @@
+/* Landing page input variant */
+.input[data-variant="landing"] {
+  font-size: 4rem;
+  height: 80px;
+  font-family: "Montserrat-italic", serif;
+  font-style: italic;
+  text-align: center;
+  color: black;
+  background-color: transparent;
+  border: none;
+  outline: none;
+  padding: 0px 0;
+}
+
+.input[data-variant="landing"]::placeholder {
+  color: rgba(0, 0, 0, 0.3);
+  font-style: italic;
+}
+
+/* Header input variant */
+.input[data-variant="header"] {
+  font-family: "Montserrat-italic", serif;
+  font-size: 1.2rem;
+  font-weight: 600;
+  font-style: italic;
+  color: white;
+  background-color: transparent;
+  border: none;
+  padding-right: 0px 0;
+  min-width: 200px;
+  outline: none;
+}
+
+.input[data-variant="header"]::placeholder {
+  color: rgba(255, 255, 255, 0.5);
+  font-style: italic;
+}

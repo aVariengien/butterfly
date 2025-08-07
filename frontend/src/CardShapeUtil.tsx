@@ -11,9 +11,34 @@ import { cardShapeProps } from './card-shape-props'
 import { ICardShape } from './card-shape-types'
 import { Paper, TextInput, Textarea, Button, Collapse, Image, ScrollArea } from '@mantine/core'
 import { CardTypeToColors, CardTypeToLayout } from './card-config'
-import { DEFAULT_TEST_IMAGE } from './test-image'
 import { getSelectedCardType } from './card-state'
 import classes from './card.module.css'
+import { useSessionContext } from './contexts/SessionContext'
+
+// Session start time for consistent timestamp calculation
+const SESSION_START_TIME = Date.now()
+
+const generateTitle = async (description: string): Promise<string> => {
+	try {
+		const response = await fetch('http://localhost:8000/generate-title', {
+			method: 'POST',
+			headers: {
+				'Content-Type': 'application/json',
+			},
+			body: JSON.stringify({ description }),
+		})
+		
+		if (!response.ok) {
+			throw new Error('Failed to generate title')
+		}
+		
+		const data = await response.json()
+		return data.title
+	} catch (error) {
+		console.error('Error generating title:', error)
+		return ''
+	}
+}
 
 // There's a guide at the bottom of this file!
 
@@ -29,21 +54,31 @@ export class CardShapeUtil extends ShapeUtil<ICardShape> {
 		return false
 	}
 	override canResize(_shape: ICardShape) {
-		return true
+		// Get the current page to check if we're in History view
+		const currentPageId = this.editor.getCurrentPageId()
+		const currentPage = this.editor.getPages().find(page => page.id === currentPageId)
+		const isHistoryView = currentPage && currentPage.name === "History"
+		
+		// Disable resize in History view
+		return !isHistoryView
 	}
 
 	// [4]
 	getDefaultProps(): ICardShape['props'] {
 		const selectedCardType = getSelectedCardType()
+		// Calculate creation time as seconds since session start
+		const creationTime = Math.floor((Date.now() - SESSION_START_TIME) / 1000)
+		
 		return {
 			w: 300,
 			h: 300,
 			color: 'blue',
 			body: '',
 			title: '',
-			image: DEFAULT_TEST_IMAGE,
+			image: '',
 			details: 'This is additional detail information that can be expanded.',
 			card_type: selectedCardType,
+			createdAt: creationTime,
 		}
 	}
 
@@ -60,11 +95,36 @@ export class CardShapeUtil extends ShapeUtil<ICardShape> {
 	component(shape: ICardShape) {
 		// eslint-disable-next-line react-hooks/rules-of-hooks
 		const [detailsExpanded, setDetailsExpanded] = useState(false)
+		// eslint-disable-next-line react-hooks/rules-of-hooks
+		const sessionContext = useSessionContext()
 		
 		const layout = CardTypeToLayout[shape.props.card_type]
 		const borderColor = CardTypeToColors[shape.props.card_type]
+		const toValidate = shape.props.toValidate || false
+		
+
+
+		// Get the current page id
+		const currentPageId = this.editor.getCurrentPageId()
+		const currentPage = this.editor.getPages().find(page => page.id === currentPageId)
+		const isActivePage = currentPage && currentPage.name === "Active"
+		const isHistoryView = currentPage && currentPage.name === "History"
+
+		// Session end state
+		const { sessionEnded, selectedCards, onCardSelect } = sessionContext
+		const isSelected = selectedCards.has(shape.id)
+		const isSessionEndMode = sessionEnded && isActivePage // Don't apply session end logic to validation cards
+		
+
+		console.log("history view", isHistoryView);
+		console.log("session end mode", isSessionEndMode)
+		console.log("session ended", sessionEnded)
+		console.log("isActive", isActivePage)
+
+
 
 		const handleTitleChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+			if (isSessionEndMode || isHistoryView) return // Disable editing during session end
 			this.editor.updateShape<ICardShape>({
 				id: shape.id,
 				type: shape.type,
@@ -75,7 +135,26 @@ export class CardShapeUtil extends ShapeUtil<ICardShape> {
 			})
 		}
 
+		const handleTitleBlur = async () => {
+			if (isSessionEndMode || isHistoryView) return // Disable editing during session end
+			// Only generate title if current title is empty and card has title in layout and has body content
+			if (!shape.props.title.trim() && layout.title && shape.props.body.trim()) {
+				const generatedTitle = await generateTitle(shape.props.body)
+				if (generatedTitle) {
+					this.editor.updateShape<ICardShape>({
+						id: shape.id,
+						type: shape.type,
+						props: {
+							...shape.props,
+							title: generatedTitle,
+						},
+					})
+				}
+			}
+		}
+
 		const handleBodyChange = (event: React.ChangeEvent<HTMLTextAreaElement>) => {
+			if (isSessionEndMode || isHistoryView) return // Disable editing during session end
 			this.editor.updateShape<ICardShape>({
 				id: shape.id,
 				type: shape.type,
@@ -87,6 +166,7 @@ export class CardShapeUtil extends ShapeUtil<ICardShape> {
 		}
 
 		const handleDetailsChange = (event: React.ChangeEvent<HTMLTextAreaElement>) => {
+			if (isSessionEndMode || isHistoryView) return // Disable editing during session end
 			this.editor.updateShape<ICardShape>({
 				id: shape.id,
 				type: shape.type,
@@ -95,6 +175,29 @@ export class CardShapeUtil extends ShapeUtil<ICardShape> {
 					details: event.target.value,
 				},
 			})
+		}
+
+		const handleAccept = () => {
+			this.editor.updateShape<ICardShape>({
+				id: shape.id,
+				type: shape.type,
+				props: {
+					...shape.props,
+					toValidate: false,
+				},
+			})
+		}
+
+		const handleReject = () => {
+			this.editor.deleteShapes([shape.id])
+		}
+
+		const handleSessionEndClick = (e: React.MouseEvent) => {
+			if (!isSessionEndMode) return
+			console.log("card clicked");
+			e.stopPropagation()
+			e.preventDefault()
+			onCardSelect(shape.id)
 		}
 
 		return (
@@ -110,6 +213,8 @@ export class CardShapeUtil extends ShapeUtil<ICardShape> {
 					withBorder 
 					radius="md" 
 					className={classes.card}
+					onBlur={!(isSessionEndMode || isHistoryView) ? handleTitleBlur : undefined}
+					onClick={handleSessionEndClick}
 					style={{
 						width: '100%',
 						height: '100%',
@@ -117,8 +222,78 @@ export class CardShapeUtil extends ShapeUtil<ICardShape> {
 						flexDirection: 'column',
 						borderColor: `var(--mantine-color-${borderColor}-4)`,
 						borderWidth: '4px',
+						opacity: isSessionEndMode ? (isSelected ? 1 : 0.4) : (toValidate ? 0.7 : 1),
+						position: 'relative',
+						cursor: isSessionEndMode ? 'pointer' : 'default',
+						pointerEvents: (isSessionEndMode || isHistoryView) ? 'all' : undefined,
 					}}
 				>	
+					{/* Validation overlay */}
+					{toValidate && (
+						<div
+							style={{
+								position: 'absolute',
+								top: 0,
+								left: 0,
+								right: 0,
+								bottom: 0,
+								backgroundColor: 'rgba(149, 149, 149, 0.1)',
+								borderRadius: '8px',
+								pointerEvents: 'none',
+								zIndex: 1,
+							}}
+						/>
+					)}
+
+					{/* Accept/Reject buttons for cards to validate */}
+					{toValidate && (
+						<div style={{ 
+							position: 'absolute', 
+							top: '8px', 
+							right: '8px', 
+							zIndex: 2,
+							display: 'flex', 
+							gap: '4px' 
+						}}>
+							<Button
+								size="xs"
+								variant="filled"
+								color="green"
+								onClick={handleAccept}
+								onPointerDown={(e) => {
+									e.stopPropagation()
+									e.preventDefault()
+								}}
+								style={{ 
+									fontSize: '10px',
+									height: '20px',
+									minWidth: '40px',
+									padding: '0 6px',
+								}}
+							>
+								✓
+							</Button>
+							<Button
+								size="xs"
+								variant="filled"
+								color="red"
+								onClick={handleReject}
+								onPointerDown={(e) => {
+									e.stopPropagation()
+									e.preventDefault()
+								}}
+								style={{ 
+									fontSize: '10px',
+									height: '20px',
+									minWidth: '40px',
+									padding: '0 6px',
+								}}
+							>
+								✗
+							</Button>
+						</div>
+					)}
+					
 					{/* Image banner */}
 					{layout.image && shape.props.image && (
 						<Image
@@ -146,11 +321,13 @@ export class CardShapeUtil extends ShapeUtil<ICardShape> {
 								value={shape.props.title}
 								onChange={handleTitleChange}
 								onPointerDown={(e) => e.stopPropagation()}
+								readOnly={(isSessionEndMode || isHistoryView)}
 								styles={{
 									input: {
 										fontSize: '1.2rem',
 										fontWeight: 700,
 										padding: 0,
+										cursor: (isSessionEndMode || isHistoryView) ? 'pointer' : 'text',
 									}
 								}}
 							/>
@@ -168,9 +345,11 @@ export class CardShapeUtil extends ShapeUtil<ICardShape> {
 								onPointerDown={(e) => e.stopPropagation()}
 								minRows={2}
 								autosize
+								readOnly={(isSessionEndMode || isHistoryView)}
 								styles={{
 									input: {
 										padding: 0,
+										cursor: (isSessionEndMode || isHistoryView) ? 'pointer' : 'text',
 									}
 								}}
 							/>
@@ -205,7 +384,7 @@ export class CardShapeUtil extends ShapeUtil<ICardShape> {
 										height: 'auto', 
 										fontWeight: 'normal',
 										userSelect: 'none',
-										pointerEvents: 'all'
+										pointerEvents: (isSessionEndMode || isHistoryView) ? 'none' : 'all'
 									}}
 								>
 									{detailsExpanded ? 'Less' : 'More'}
@@ -223,10 +402,12 @@ export class CardShapeUtil extends ShapeUtil<ICardShape> {
 											onPointerDown={(e) => e.stopPropagation()}
 											minRows={3}
 											autosize
+											readOnly={(isSessionEndMode || isHistoryView)}
 											styles={{
 												input: {
 													padding: 0,
 													fontSize: '0.875rem',
+													cursor: (isSessionEndMode || isHistoryView) ? 'pointer' : 'text',
 												}
 											}}
 										/>

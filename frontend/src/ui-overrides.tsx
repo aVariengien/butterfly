@@ -65,7 +65,7 @@ export function CardTypeSelector() {
 				value={selectedCardType}
 				onChange={handleCardTypeChange}
 				data={cardTypeOptions}
-				color="blue"
+				color="red"
 				size="sm"
 			/>
 		</div>
@@ -74,6 +74,13 @@ export function CardTypeSelector() {
 
 export const uiOverrides: TLUiOverrides = {
 	// Remove custom tools since we won't use the toolbar
+	tools(editor, tools) {
+		console.log(tools)
+		return {
+			select: tools.select,
+			hand: tools.hand,
+		}
+	}
 }
 
 export const components: TLComponents = {
