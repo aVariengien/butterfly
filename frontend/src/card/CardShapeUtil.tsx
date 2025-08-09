@@ -14,6 +14,7 @@ import { getSelectedCardType } from './card-state'
 import { getCardTypeColor, getCardTypeLayout } from '../utils/dynamicCardConfig'
 import classes from '../styles/card.module.css'
 import { useSessionContext } from '../contexts/SessionContext'
+import { performFluidTypeChecking } from '../services/cardApiService'
 
 // Session start time for consistent timestamp calculation
 const SESSION_START_TIME = Date.now()
@@ -105,6 +106,8 @@ export class CardShapeUtil extends ShapeUtil<ICardShape> {
 			details: 'This is additional detail information that can be expanded.',
 			card_type: selectedCardType,
 			createdAt: creationTime,
+			fluidErrors: [],
+			lastValidationValue: '',
 		}
 	}
 
@@ -124,8 +127,8 @@ export class CardShapeUtil extends ShapeUtil<ICardShape> {
 		
 		const layout = getCardTypeLayout(shape.props.card_type)
 		const borderColor = getCardTypeColor(shape.props.card_type)
-		console.log("Card color", shape.id, borderColor, shape.props.card_type)
 		const toValidate = shape.props.toValidate || false
+		const fluidErrors = shape.props.fluidErrors || []
 		
 		// Get the current page id
 		const currentPageId = this.editor.getCurrentPageId()
@@ -179,6 +182,51 @@ export class CardShapeUtil extends ShapeUtil<ICardShape> {
 			})
 		}
 
+		// Create card hash for change detection
+		const createCardHash = (cardProps: any): string => {
+			const content = {
+				title: cardProps.title || '',
+				body: cardProps.body || '', 
+				details: cardProps.details || '',
+				card_type: cardProps.card_type || '',
+				image: cardProps.image || ''
+			}
+			return btoa(JSON.stringify(content))
+		}
+
+		// Handle card blur event for fluid type checking
+		const handleCardBlur = async () => {
+			if (isSessionEndMode || isHistoryView || !sessionContext.sidepanelCode) return
+			
+			const currentHash = createCardHash(shape.props)
+			
+			// Skip if card hasn't changed since last validation
+			if (shape.props.lastValidationValue === currentHash) {
+				console.log('Card unchanged, skipping fluid type checking')
+				return
+			}
+
+			try {
+				console.log('Performing fluid type checking on card blur')
+				const errors = await performFluidTypeChecking(shape.props, sessionContext.sidepanelCode)
+				
+				if (errors !== null) {
+					// Update card with validation results
+					this.editor.updateShape<ICardShape>({
+						id: shape.id,
+						type: shape.type,
+						props: {
+							...shape.props,
+							fluidErrors: errors,
+							lastValidationValue: currentHash,
+						},
+					})
+				}
+			} catch (error) {
+				console.error('Failed to perform fluid type checking:', error)
+			}
+		}
+
 
 		const handleAccept = () => {
 			this.editor.updateShape<ICardShape>({
@@ -216,7 +264,7 @@ export class CardShapeUtil extends ShapeUtil<ICardShape> {
 					withBorder 
 					radius="md" 
 					className={classes.card}
-					onBlur={!(isSessionEndMode || isHistoryView) ? handleTitleBlur : undefined}
+					onBlur={!(isSessionEndMode || isHistoryView) ? handleCardBlur : undefined}
 					onClick={handleSessionEndClick}
 					style={{
 						width: '100%',
@@ -364,6 +412,26 @@ export class CardShapeUtil extends ShapeUtil<ICardShape> {
 						{layout.details && shape.props.details && (
 							<div style={{ marginTop: '0px' }}>
 								<MarkdownText content={shape.props.details} />
+							</div>
+						)}
+
+						{/* Fluid type checking errors */}
+						{fluidErrors.length > 0 && (
+							<div style={{ 
+								marginTop: '8px',
+								padding: '6px',
+								backgroundColor: '#ffe6e6',
+								border: '1px solid #ff6b6b',
+								borderRadius: '4px',
+								fontSize: '0.7rem',
+								color: '#d63031',
+								lineHeight: '1.2'
+							}}>
+								{fluidErrors.map((error, index) => (
+									<div key={index} style={{ marginBottom: index < fluidErrors.length - 1 ? '4px' : 0 }}>
+										<MarkdownText content={error} />
+									</div>
+								))}
 							</div>
 						)}
 					</div>

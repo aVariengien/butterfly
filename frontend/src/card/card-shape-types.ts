@@ -17,5 +17,7 @@ export type ICardShape = TLBaseShape<
 		card_type: string,
 		toValidate?: boolean, // flag to show accept/reject buttons
 		createdAt?: number, // seconds since session start
+		fluidErrors?: string[], // fluid type checking errors
+		lastValidationValue?: string, // cached hash of card for change detection
 	}
 >

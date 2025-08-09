@@ -10,7 +10,7 @@ import subprocess
 import tempfile
 import json
 import inspect
-from typing import Optional, Dict, Any, Type, Union, get_args, get_origin, Annotated, Literal
+from typing import Optional, Dict, Any, Type, Union, get_args, get_origin, Annotated, Literal, List
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -155,6 +155,26 @@ class CodeExecutionResponse(BaseModel):
     success: bool
     error: Optional[str] = None
     card_types: Optional[CardTypeConfig] = None
+
+
+class FluidTypeCheckingRequest(BaseModel):
+    card: Union[ReactCard, Card]
+    sidepanel_code: str
+
+
+class FieldValidationResult(BaseModel):
+    score: int = Field(..., description="Score from 1 to 10 for how well the value matches the description")
+    reasoning: str = Field(..., description="Explanation of the score")
+
+
+class FluidTypeCheckLLMResponse(BaseModel):
+    score: int = Field(..., description="Score from 1 to 10 for how well the value matches the description")
+    reasoning: str = Field(..., description="Clear explanation of the score")
+
+
+class FluidTypeCheckingResponse(BaseModel):
+    errors: List[str] = Field(default=[], description="List of error messages for fields with score < 5")
+    field_scores: Dict[str, FieldValidationResult] = Field(default={}, description="Detailed scores and reasoning for each field")
 
 
 
@@ -373,7 +393,7 @@ def get_card_types_from_code(code: str) -> tuple[bool, str, Dict[str, Type[Card]
                 '__name__': __name__,  # Required for class creation
             },
             'BaseModel': BaseModel,
-            'Field': lambda *args, **kwargs: kwargs.get('default', ...),  # Simplified Field for user code
+            'Field': Field,  # Simplified Field for user code
             'Card': Card,  # Use Card instead of ReactCard for user definitions
             'Image': Image,
             'Optional': Optional,  # Import Optional for type hints
@@ -394,6 +414,7 @@ def get_card_types_from_code(code: str) -> tuple[bool, str, Dict[str, Type[Card]
                 issubclass(obj, Card) and 
                 obj is not Card):
                 pydantic_classes[name] = obj
+                print(json.dumps(obj.schema(), indent=2))
         
         if not pydantic_classes:
             return False, "No card type classes found. Define classes that inherit from Card.", {}
@@ -420,10 +441,236 @@ def execute_python_code_for_config(code: str) -> tuple[bool, str, Dict[str, Any]
     return True, "", react_config
 
 
+def cast_react_card_to_pydantic(react_card: ReactCard, card_types: Dict[str, Type[Card]]) -> Card:
+    """
+    Cast a ReactCard to the appropriate Pydantic Card subclass based on card_type.
+    """
+    card_type_class = card_types.get(react_card.card_type)
+    if not card_type_class:
+        raise ValueError(f"Unknown card type: {react_card.card_type}")
+    
+    # Convert ReactCard fields to Card fields
+    card_data = {
+        'w': react_card.w,
+        'h': react_card.h,
+        'x': react_card.x,
+        'y': react_card.y,
+        'visible': True,  # Default visible to True
+    }
+    
+    # Get model fields to understand expected types
+    model_fields = card_type_class.model_fields
+    
+    # Handle each field based on its expected type in the target model
+    for field_name in ['title', 'body', 'details']:
+        react_value = getattr(react_card, field_name, '')
+        
+        if field_name in model_fields:
+            field_info = model_fields[field_name]
+            annotation_str = str(field_info.annotation)
+            
+            # If the field expects None and we have an empty string, set to None
+            if annotation_str == '<class \'NoneType\'>' or annotation_str == 'None':
+                card_data[field_name] = None
+            elif react_value:  # Only include non-empty values
+                card_data[field_name] = react_value
+            # If field is required but empty, include it anyway to get proper validation error
+            elif field_info.default is ...:  # Required field
+                card_data[field_name] = react_value
+    
+    # Handle image field
+    if 'image' in model_fields:
+        field_info = model_fields['image']
+        if react_card.image:
+            # Create Image object from base64 string
+            card_data['image'] = Image(description="", base64=react_card.image)
+        elif field_info.default is ...:  # Required field
+            # Create empty Image object for required image fields
+            card_data['image'] = Image(description="Auto-generated placeholder", base64="")
+    
+    # Create instance of the correct card type
+    return card_type_class(**card_data)
+
+
+async def validate_field_with_llm(field_name: str, field_value: Any, field_description: str, card_type_name: str) -> FieldValidationResult:
+    """
+    Use Groq LLM to validate how well a field value matches its description.
+    """
+    prompt = f"""On a score from 1 to 10, how much does this value match this description for the type called {card_type_name}?
+
+Field: {field_name}
+Value: {field_value}
+Description: {field_description}
+
+Please provide a score from 1 to 10 and reasoning for your score. Be strict but fair in your evaluation."""
+
+    print(prompt)
+    try:
+        # Use async completion with structured output
+        response = await acompletion(
+            model=FAST_MODEL_NAME,
+            messages=[{
+                "role": "user",
+                "content": prompt
+            }],
+            max_tokens=200,
+            temperature=0.3,
+            response_format={
+                "type": "json_schema",
+                "json_schema": {
+                    "name": "field_validation",
+                    "schema": FluidTypeCheckLLMResponse.model_json_schema()
+                }
+            }
+        )
+        
+        content = response.choices[0].message.content.strip()
+        
+        # Parse the structured JSON response
+        import json
+        llm_result = json.loads(content)
+        validated_result = FluidTypeCheckLLMResponse(**llm_result)
+        
+        return FieldValidationResult(
+            score=validated_result.score,
+            reasoning=validated_result.reasoning
+        )
+        
+    except Exception as e:
+        print(f"LLM validation error for field {field_name}: {e}")
+        # Return a low score if LLM call fails
+        return FieldValidationResult(
+            score=3,
+            reasoning=f"Failed to validate field due to error: {str(e)}"
+        )
+
+
+async def perform_fluid_type_checking(card: Card, card_types: Dict[str, Type[Card]]) -> FluidTypeCheckingResponse:
+    """
+    Perform fluid type checking on a Card instance.
+    """
+    card_type_name = card.__class__.__name__
+    schema_dict = card_types[card_type_name].schema()
+
+    # Pretty-print JSON schema
+    print(json.dumps(schema_dict, indent=2))
+    
+    
+    # Get field information from the model
+    model_fields = card.model_fields
+    
+    
+    # Fields to skip (layout/positioning fields)
+    skip_fields = {'w', 'h', 'x', 'y', 'visible'}
+    
+    field_scores = {}
+    errors = []
+    print("model field", model_fields)
+    
+    # Process each field
+    for field_name, field_info in model_fields.items():
+        # Skip layout fields
+        print("description", model_fields[field_name])
+        if field_name in skip_fields:
+            continue
+            
+        # Get field value
+        field_value = getattr(card, field_name, None)
+        
+        # Skip None or empty values
+        if field_value is None or field_value == "":
+            continue
+            
+        # Get field description
+        field_description = ""
+        if hasattr(field_info, 'description') and field_info.description:
+            field_description = field_info.description
+        else:
+            # Convert field name to human readable description
+            field_description = ''
+        
+        # Validate field with LLM
+        validation_result = await validate_field_with_llm(
+            field_name, field_value, field_description, card_type_name
+        )
+        
+        field_scores[field_name] = validation_result
+        
+        # Add to errors if score is too low
+        if validation_result.score < 5:
+            errors.append(f"**{field_name}** - {validation_result.score}/10: {validation_result.reasoning}")
+    
+    return FluidTypeCheckingResponse(
+        errors=errors,
+        field_scores=field_scores
+    )
+
+
+@app.post("/fluid-type-checking", response_model=FluidTypeCheckingResponse)
+async def fluid_type_checking(request: FluidTypeCheckingRequest):
+    """
+    Perform fluid type checking on a card by validating field values against their descriptions.
+    """
+    try:
+        # Execute the sidepanel code to get card types
+        success, error_msg, card_types = get_card_types_from_code(request.sidepanel_code)
+
+        if not success:
+            raise HTTPException(status_code=400, detail=f"Failed to execute sidepanel code: {error_msg}")
+        
+        if not card_types:
+            raise HTTPException(status_code=400, detail="No card types found in sidepanel code")
+        
+        # Handle different input types
+        if isinstance(request.card, ReactCard):
+            # Cast ReactCard to the correct Pydantic card type
+            pydantic_card = cast_react_card_to_pydantic(request.card, card_types)
+        else:
+            # Already a Card instance
+            pydantic_card = request.card
+        
+        # Perform fluid type checking
+        result = await perform_fluid_type_checking(pydantic_card, card_types)
+        print("typechecking", result)
+        return result
+        
+    except ValueError as e:
+        print(f"Error in fluid_type_checking: {e}")
+        
+        # Check if it's a Pydantic ValidationError
+        if hasattr(e, 'errors'):
+            validation_errors = []
+            field_scores = {}
+            
+            for error in e.errors():
+                field_path = '.'.join(str(loc) for loc in error['loc'])
+                error_msg = error['msg']
+                error_type = error['type']
+                input_value = error.get('input', 'N/A')
+                
+                detailed_error = f"**{field_path}**: {error_msg} (type: {error_type}, input: {input_value})"
+                validation_errors.append(detailed_error)
+                
+                field_scores[field_path] = FieldValidationResult(
+                    score=0, 
+                    reasoning=f"{error_msg} - {error_type}"
+                )
+            
+            return FluidTypeCheckingResponse(errors=validation_errors, field_scores=field_scores)
+        else:
+            # Regular ValueError
+            return FluidTypeCheckingResponse(
+                errors=[f"**ValidationError**: {str(e)}"], 
+                field_scores={'ValidationError': FieldValidationResult(score=0, reasoning=str(e))}
+            )
+    except Exception as e:
+        print(f"Error in fluid_type_checking: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to perform fluid type checking: {str(e)}")
+
+
 @app.post("/generate-card", response_model=list[ReactCard])
 async def generate_card(request: BoardState):
     try:
-        pprint(request)
         
         # Execute the sidepanel code to get fresh card types
         success, error_msg, card_types = get_card_types_from_code(request.sidepanel_code)
@@ -438,7 +685,7 @@ async def generate_card(request: BoardState):
         available_types = list(card_types.keys())
         prompt = create_card_generation_prompt(
             intention=request.intention,
-            board_json=request.model_dump_json(),
+            board_json=request.model_dump_json(indent=2),
             available_types=available_types
         )
         
@@ -454,7 +701,7 @@ async def generate_card(request: BoardState):
             output_type=card_type_classes, 
         )
 
-        result = agent.run_sync(prompt)
+        result = await agent.run(prompt)
 
         pydantic_card = result.output
         

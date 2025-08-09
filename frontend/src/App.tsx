@@ -130,6 +130,7 @@ export default function App() {
 							sessionEnded={sessionEnded}
 							selectedCards={selectedCards}
 							onCardSelect={handleCardSelect}
+							sidepanelCode={sidepanelCode}
 						>
 							<Tldraw
 								shapeUtils={customShapeUtils}

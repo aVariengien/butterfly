@@ -12,9 +12,9 @@ class Image(BaseModel):
 class Card(BaseModel):
     """A card from the whiteboard"""
     title: Optional[str] = Field(None, description="A short title (<4 words) defining the card")
-    body: Optional[str] = Field(None, description="The body of the example, in 1-2 sentences.")
+    body: Optional[str] = Field(None, description="The body of the card, in 1-2 sentences.")
     details: Optional[str] = Field( None, description="Additional details when more space is needed.")
-    image: Optional[Image] = Field(None, description="An image illustrating the Example.")
+    image: Optional[Image] = Field(None, description="An image illustrating the card.")
     visible: bool = Field(False, description="Whether the card is visible on the whiteboard. Default to False when generating a new card, as the card is not placed yet.")
     w: float
     h: float
