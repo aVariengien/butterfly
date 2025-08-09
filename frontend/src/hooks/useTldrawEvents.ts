@@ -56,7 +56,7 @@ export function useTldrawEvents(
 							title: '',
 							body: '',
 							image: '',
-							details: 'This is additional detail information that can be expanded.',
+							details: '',
 							card_type: selectedCardType,
 							createdAt: creationTime,
 						},

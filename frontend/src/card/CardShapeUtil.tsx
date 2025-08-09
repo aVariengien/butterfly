@@ -9,14 +9,40 @@ import {
 import { cardShapeMigrations } from './card-shape-migrations'
 import { cardShapeProps } from './card-shape-props'
 import { ICardShape } from './card-shape-types'
-import { Paper, TextInput, Textarea, Button, Collapse, Image, ScrollArea } from '@mantine/core'
-import { CardTypeToColors, CardTypeToLayout } from './card-config'
+import { Paper, TextInput, Textarea, Button, Collapse, Image, ScrollArea, Text } from '@mantine/core'
 import { getSelectedCardType } from './card-state'
+import { getCardTypeColor, getCardTypeLayout } from '../utils/dynamicCardConfig'
 import classes from '../styles/card.module.css'
 import { useSessionContext } from '../contexts/SessionContext'
 
 // Session start time for consistent timestamp calculation
 const SESSION_START_TIME = Date.now()
+
+// Simple markdown renderer for basic formatting
+const MarkdownText: React.FC<{ content: string }> = ({ content }) => {
+	if (!content) return null
+	
+	return (
+		<div style={{ fontSize: '0.75rem', lineHeight: '1.3', opacity: 0.8 }}>
+			{content.split('\n').map((line, index) => {
+				// Handle bold text **text**
+				const parts = line.split(/(\*\*[^*]+\*\*)/)
+				
+				return (
+					<div key={index} style={{ marginBottom: index < content.split('\n').length - 1 ? '0.4em' : 0 }}>
+						{parts.map((part, partIndex) => {
+							if (part.startsWith('**') && part.endsWith('**')) {
+								// Bold text
+								return <strong key={partIndex}>{part.slice(2, -2)}</strong>
+							}
+							return <span key={partIndex}>{part}</span>
+						})}
+					</div>
+				)
+			})}
+		</div>
+	)
+}
 
 const generateTitle = async (description: string): Promise<string> => {
 	try {
@@ -70,8 +96,8 @@ export class CardShapeUtil extends ShapeUtil<ICardShape> {
 		const creationTime = Math.floor((Date.now() - SESSION_START_TIME) / 1000)
 		
 		return {
-			w: 300,
-			h: 300,
+			w: 250,
+			h: 250,
 			color: 'blue',
 			body: '',
 			title: '',
@@ -94,16 +120,13 @@ export class CardShapeUtil extends ShapeUtil<ICardShape> {
 	// [6]
 	component(shape: ICardShape) {
 		// eslint-disable-next-line react-hooks/rules-of-hooks
-		const [detailsExpanded, setDetailsExpanded] = useState(false)
-		// eslint-disable-next-line react-hooks/rules-of-hooks
 		const sessionContext = useSessionContext()
 		
-		const layout = CardTypeToLayout[shape.props.card_type]
-		const borderColor = CardTypeToColors[shape.props.card_type]
+		const layout = getCardTypeLayout(shape.props.card_type)
+		const borderColor = getCardTypeColor(shape.props.card_type)
+		console.log("Card color", shape.id, borderColor, shape.props.card_type)
 		const toValidate = shape.props.toValidate || false
 		
-
-
 		// Get the current page id
 		const currentPageId = this.editor.getCurrentPageId()
 		const currentPage = this.editor.getPages().find(page => page.id === currentPageId)
@@ -156,17 +179,6 @@ export class CardShapeUtil extends ShapeUtil<ICardShape> {
 			})
 		}
 
-		const handleDetailsChange = (event: React.ChangeEvent<HTMLTextAreaElement>) => {
-			if (isSessionEndMode || isHistoryView) return // Disable editing during session end
-			this.editor.updateShape<ICardShape>({
-				id: shape.id,
-				type: shape.type,
-				props: {
-					...shape.props,
-					details: event.target.value,
-				},
-			})
-		}
 
 		const handleAccept = () => {
 			this.editor.updateShape<ICardShape>({
@@ -296,11 +308,10 @@ export class CardShapeUtil extends ShapeUtil<ICardShape> {
 								objectFit: 'cover',
 								borderRadius: '4px 4px 0 0'
 							}}
-							onPointerDown={(e) => e.stopPropagation()}
 						/>
 					)}
 
-					<div style={{ padding: '12px', flex: 1, display: 'flex', flexDirection: 'column' }}>
+					<div style={{ paddingTop: '10px', flex: 1, display: 'flex', flexDirection: 'column' }}>
 						{/* Title */}
 						{layout.title && (
 							<Textarea
@@ -311,7 +322,6 @@ export class CardShapeUtil extends ShapeUtil<ICardShape> {
 								placeholder="Enter title..."
 								value={shape.props.title}
 								onChange={handleTitleChange}
-								onPointerDown={(e) => e.stopPropagation()}
 								readOnly={(isSessionEndMode || isHistoryView)}
 								minRows={1}
 								autosize
@@ -333,13 +343,12 @@ export class CardShapeUtil extends ShapeUtil<ICardShape> {
 						{layout.body && (
 							<Textarea
 								size="sm"
-								mt={layout.title ? "sm" : 0}
+								mt={0}
 								variant="unstyled"
 								placeholder="Enter description..."
 								value={shape.props.body}
 								onChange={handleBodyChange}
-								onPointerDown={(e) => e.stopPropagation()}
-								minRows={2}
+								minRows={1}
 								autosize
 								readOnly={(isSessionEndMode || isHistoryView)}
 								styles={{
@@ -352,65 +361,29 @@ export class CardShapeUtil extends ShapeUtil<ICardShape> {
 						)}
 
 						{/* Details section */}
-						{layout.details && (
-							<>
-							<div style={{ marginTop: '8px' }}>
-								<Button
-									variant="subtle"
-									size="xs"
-									onClick={() => setDetailsExpanded(!detailsExpanded)}
-									onPointerDown={(e) => {
-										e.stopPropagation()
-										e.preventDefault()
-									}}
-									onPointerUp={(e) => {
-										e.stopPropagation()
-										e.preventDefault()
-									}}
-									onMouseDown={(e) => {
-										e.stopPropagation()
-										e.preventDefault()
-									}}
-									onMouseUp={(e) => {
-										e.stopPropagation()
-										e.preventDefault()
-									}}
-									style={{ 
-										padding: 0, 
-										height: 'auto', 
-										fontWeight: 'normal',
-										userSelect: 'none',
-										pointerEvents: (isSessionEndMode || isHistoryView) ? 'none' : 'all'
-									}}
-								>
-									{detailsExpanded ? 'Less' : 'More'}
-								</Button>
-								</div>
-								<div>
-								
-								<Collapse in={detailsExpanded}>
-										<Textarea
-											size="xs"
-											variant="unstyled"
-											placeholder="Enter additional details..."
-											value={shape.props.details}
-											onChange={handleDetailsChange}
-											onPointerDown={(e) => e.stopPropagation()}
-											minRows={3}
-											autosize
-											readOnly={(isSessionEndMode || isHistoryView)}
-											styles={{
-												input: {
-													padding: 0,
-													fontSize: '0.875rem',
-													cursor: (isSessionEndMode || isHistoryView) ? 'pointer' : 'text',
-												}
-											}}
-										/>
-								</Collapse>
+						{layout.details && shape.props.details && (
+							<div style={{ marginTop: '0px' }}>
+								<MarkdownText content={shape.props.details} />
 							</div>
-							</>
 						)}
+					</div>
+					
+					{/* Card type label - bottom left */}
+					<div
+						style={{
+							position: 'absolute',
+							bottom: '4px',
+							right: '6px',
+							fontSize: '0.65rem',
+							color: `var(--mantine-color-${borderColor}-6)`,
+							fontWeight: 500,
+							opacity: 0.7,
+							pointerEvents: 'none',
+							userSelect: 'none',
+							textTransform: 'capitalize',
+						}}
+					>
+						{shape.props.card_type}
 					</div>
 				</Paper>
 			</HTMLContainer>

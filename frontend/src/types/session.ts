@@ -39,4 +39,6 @@ export interface HeaderProps {
 	timeRemaining: number | null
 	currentPage: 'active' | 'history'
 	onPageSwitch: (page: 'active' | 'history') => void
+	onEndSession?: () => void
+	style?: React.CSSProperties
 }

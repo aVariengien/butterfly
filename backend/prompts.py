@@ -1,19 +1,32 @@
 
+def create_card_generation_prompt(intention: str, board_json: str, available_types: list[str]) -> str:
+    """
+    Create a complete prompt for card generation including user intention and constraints.
+    
+    Args:
+        intention: User's stated intention/goal
+        board_json: JSON representation of current board state
+        available_types: List of available card type names
+    
+    Returns:
+        Complete formatted prompt string
+    """
+    return f"""You are in charge of making recommendation to create next card on a whiteboard. Make the card as close as what you can infer from the users' thinking. Be considerate and try to keep the flow that the user creates both in the content and the organisation of the cards.
 
-NEXT_CARD_PROMPT = """Here is the state of the board. You task is to generate a relevant next card to help nurture the thinking of the user. 
+Global user's thinking goal: {intention}
 
-### Card structure
+## Current state of the board
+{board_json}
 
-class Card(BaseModel):
-    w: int
-    h: int
-    x: float
-    y: float
-    title: str
-    body: str
-    image: Optional[str] #base64 image
-    details: Optional[str]
-    card_type: str # the card type should be one of the allowed card type d
+## Answer format
+You must respond with one of the following card types: {', '.join(available_types)} following the json format.
 
-### Board state
-{board}"""
+## Board instructions
+* Generate a card that is one of these specific types, not a generic Card. 
+* If you want to keep a field empty, use null (no quotes). 
+* When generating cards, make sure the width is always at least 200, and height 200. Make sure that cards don't overlap.
+* Only use multiple of 50 for the x,y,w,h fields. (x,y) give the coordinate on the top left, (x+w, y+h) on the bottom right.
+* When generating cards as children field to other cards, order them as a column.
+
+The card should be relevant to the user's stated intention: "{intention}"
+"""

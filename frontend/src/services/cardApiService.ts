@@ -1,10 +1,9 @@
 import { Editor, createShapeId } from 'tldraw'
 import { GeneratedCard } from '../types/session'
 import { SESSION_START_TIME } from '../utils/constants'
-import { CardTypeToLayout } from '../card/card-config'
 
 // API function to generate cards
-export async function generateCard(editor: Editor): Promise<GeneratedCard | null> {
+export async function generateCard(editor: Editor, sidepanelCode: string, intention: string): Promise<GeneratedCard[] | null> {
 	try {
 		// Get current cards from the editor
 		const shapes = editor.getCurrentPageShapes()
@@ -26,12 +25,10 @@ export async function generateCard(editor: Editor): Promise<GeneratedCard | null
 				}
 			})
 
-		// Get all available card types from CardTypeToLayout
-		const allowedCardTypes = Object.keys(CardTypeToLayout)
-
 		const requestBody = { 
 			cards,
-			allowed_card_types: allowedCardTypes
+			sidepanel_code: sidepanelCode,
+			intention: intention
 		}
 		
 		console.log('Sending request to backend:', requestBody)
@@ -50,12 +47,12 @@ export async function generateCard(editor: Editor): Promise<GeneratedCard | null
 			throw new Error(`Failed to generate card: ${response.status} - ${errorText}`)
 		}
 
-		const generatedCard = await response.json()
-		console.log('Generated card received:', generatedCard)
-		return {
-			...generatedCard,
+		const generatedCards = await response.json()
+		console.log('Generated cards received:', generatedCards)
+		return generatedCards.map(card => ({
+			...card,
 			id: createShapeId(),
-		}
+		}))
 	} catch (error) {
 		console.error('Error generating card:', error)
 		return null

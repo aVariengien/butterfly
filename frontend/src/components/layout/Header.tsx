@@ -9,7 +9,9 @@ export function Header({
 	setIntention,
 	timeRemaining,
 	currentPage,
-	onPageSwitch
+	onPageSwitch,
+	onEndSession,
+	style
 }: HeaderProps) {
 	return (
 		<div
@@ -25,6 +27,7 @@ export function Header({
 				display: 'flex',
 				alignItems: 'center',
 				padding: '0 20px',
+				...style
 			}}
 		>
 			<span
@@ -69,6 +72,21 @@ export function Header({
 				>
 					History Page
 				</Button>
+				{onEndSession && (
+					<Button
+						variant="outline"
+						size="sm"
+						onClick={onEndSession}
+						style={{
+							backgroundColor: 'transparent',
+							color: '#ff6b6b',
+							borderColor: '#ff6b6b',
+							marginLeft: '10px',
+						}}
+					>
+						End Session
+					</Button>
+				)}
 			</div>
 			
 			{/* Session Timer */}

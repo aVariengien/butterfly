@@ -13,6 +13,7 @@ dist-ssr
 *.local
 
 # Editor directories and files
+backend/__pycache__/*
 sandbox/
 .vscode/*
 !.vscode/extensions.json

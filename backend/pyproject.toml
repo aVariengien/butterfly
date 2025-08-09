@@ -6,4 +6,7 @@ dependencies = [
     "fastapi",
     "uvicorn",
     "litellm",
+    "python-dotenv",
+    "pydantic-ai>=0.6.2",
+    "nest-asyncio>=1.6.0",
 ]

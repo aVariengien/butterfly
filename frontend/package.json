@@ -13,9 +13,14 @@
     "@emotion/react": "^11.14.0",
     "@mantine/core": "^8.2.2",
     "@mantine/hooks": "^8.2.2",
+    "@tabler/icons-react": "^3.34.1",
     "@tldraw/sync": "^3.15.0",
+    "@types/react-syntax-highlighter": "^15.5.13",
+    "@uiw/react-textarea-code-editor": "^3.1.1",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
+    "react-syntax-highlighter": "^15.6.1",
+    "rehype-prism-plus": "^2.0.1",
     "tldraw": "^3.15.0"
   },
   "devDependencies": {

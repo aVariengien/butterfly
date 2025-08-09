@@ -1,7 +1,7 @@
 import { CardType } from './card-shape-types'
 
 // Global state for the currently selected card type
-let currentSelectedCardType: CardType = 'example'
+let currentSelectedCardType: CardType = 'Example'
 
 // Getter function
 export function getSelectedCardType(): CardType {

@@ -7,6 +7,7 @@ export interface UsePageManagerReturn {
 	initializePages: (editorInstance: Editor) => void
 	switchToPage: (pageName: 'active' | 'history') => void
 	archiveCurrentSession: () => void
+	handleEndSession: () => void
 	handleFinishSession: () => void
 }
 
@@ -46,7 +47,14 @@ export function usePageManager(
 		archiveCurrentSession(editor, sessionNumber)
 	}, [editor, sessionNumber])
 
-	// Handle finishing a session (archive and start new)
+	// Handle ending a session early (show overlay)
+	const handleEndSession = useCallback(() => {
+		if (!editor) return
+		switchToPageWrapper('active')
+		setSessionEnded(true)
+	}, [editor, switchToPageWrapper, setSessionEnded])
+
+	// Handle finishing a session (archive and start new) - called from overlay
 	const handleFinishSession = useCallback(() => {
 		if (!editor) return
 		switchToPageWrapper('active')
@@ -93,6 +101,7 @@ export function usePageManager(
 		initializePages: initializePagesWrapper,
 		switchToPage: switchToPageWrapper,
 		archiveCurrentSession: archiveCurrentSessionWrapper,
+		handleEndSession,
 		handleFinishSession,
 	}
 }

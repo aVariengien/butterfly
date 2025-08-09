@@ -14,19 +14,19 @@ export const CardTypeToLayout: Record<CardType, {
 	body: boolean
 	details: boolean
 }> = {
-	example: {
+	Example: {
 		image: true,
 		title: true,
 		body: true,
 		details: true,
 	},
-	question: {
+	Question: {
 		image: false,
 		title: true,
 		body: false,
 		details: false,
 	},
-	idea: {
+	Idea: {
 		image: false,
 		title: true,
 		body: true,
