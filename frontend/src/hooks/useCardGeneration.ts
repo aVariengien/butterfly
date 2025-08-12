@@ -48,7 +48,6 @@ export function useCardGeneration(
 					const shapesToCreate = newCards.map(newCard => {
 						const shapeId = createShapeId(newCard.id)
 						const creationTime = Math.floor((Date.now() - SESSION_START_TIME) / 1000)
-						
 						return {
 							id: shapeId,
 							type: 'card',

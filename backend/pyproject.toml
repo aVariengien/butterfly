@@ -7,6 +7,8 @@ dependencies = [
     "uvicorn",
     "litellm",
     "python-dotenv",
-    "pydantic-ai>=0.6.2",
+    "pydantic-ai[logfire]>=0.6.2",
     "nest-asyncio>=1.6.0",
+    "logfire>=4.2.0",
+    "runware>=0.4.18",
 ]

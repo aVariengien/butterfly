@@ -124,6 +124,8 @@ export class CardShapeUtil extends ShapeUtil<ICardShape> {
 	component(shape: ICardShape) {
 		// eslint-disable-next-line react-hooks/rules-of-hooks
 		const sessionContext = useSessionContext()
+		// eslint-disable-next-line react-hooks/rules-of-hooks
+		const [isDetailsEditing, setIsDetailsEditing] = useState(true)
 		
 		const layout = getCardTypeLayout(shape.props.card_type)
 		const borderColor = getCardTypeColor(shape.props.card_type)
@@ -182,14 +184,44 @@ export class CardShapeUtil extends ShapeUtil<ICardShape> {
 			})
 		}
 
+		const handleDetailsChange = (event: React.ChangeEvent<HTMLTextAreaElement>) => {
+			if (isSessionEndMode || isHistoryView) return // Disable editing during session end
+			event.stopPropagation()
+			event.preventDefault()
+			this.editor.updateShape<ICardShape>({
+				id: shape.id,
+				type: shape.type,
+				props: {
+					...shape.props,
+					details: event.target.value,
+				},
+			})
+		}
+
+		const handleDetailsFocus = (event?: React.MouseEvent) => {
+			if (isSessionEndMode || isHistoryView) return
+			if (event) {
+				event.stopPropagation()
+				event.preventDefault()
+			}
+			setIsDetailsEditing(true)
+			console.log("details editing", shape.props.details)
+		}
+
+		const handleDetailsBlur = () => {
+			if (isSessionEndMode || isHistoryView) return
+			setIsDetailsEditing(false)
+		}
+
 		// Create card hash for change detection
-		const createCardHash = (cardProps: any): string => {
+		const createCardHash = (cardProps: any, code: string): string => {
 			const content = {
 				title: cardProps.title || '',
 				body: cardProps.body || '', 
 				details: cardProps.details || '',
 				card_type: cardProps.card_type || '',
-				image: cardProps.image || ''
+				image: cardProps.image || '',
+				code: code || ''
 			}
 			return btoa(JSON.stringify(content))
 		}
@@ -198,7 +230,7 @@ export class CardShapeUtil extends ShapeUtil<ICardShape> {
 		const handleCardBlur = async () => {
 			if (isSessionEndMode || isHistoryView || !sessionContext.sidepanelCode) return
 			
-			const currentHash = createCardHash(shape.props)
+			const currentHash = createCardHash(shape.props, sessionContext.sidepanelCode)
 			
 			// Skip if card hasn't changed since last validation
 			if (shape.props.lastValidationValue === currentHash) {
@@ -219,6 +251,7 @@ export class CardShapeUtil extends ShapeUtil<ICardShape> {
 							...shape.props,
 							fluidErrors: errors,
 							lastValidationValue: currentHash,
+							typecheckSuccess: errors.length === 0, // Set success if no errors
 						},
 					})
 				}
@@ -227,7 +260,6 @@ export class CardShapeUtil extends ShapeUtil<ICardShape> {
 			}
 		}
 
-
 		const handleAccept = () => {
 			this.editor.updateShape<ICardShape>({
 				id: shape.id,
@@ -235,8 +267,9 @@ export class CardShapeUtil extends ShapeUtil<ICardShape> {
 				props: {
 					...shape.props,
 					toValidate: false,
+					typecheckSuccess: true,
 				},
-			})
+			});
 		}
 
 		const handleReject = () => {
@@ -348,13 +381,18 @@ export class CardShapeUtil extends ShapeUtil<ICardShape> {
 					{/* Image banner */}
 					{layout.image && shape.props.image && (
 						<Image
-							src={shape.props.image}
 							alt="Card image"
+							src={shape.props.image}
 							style={{
 								width: '100%',
-								maxHeight: '100px',
-								objectFit: 'cover',
+								maxHeight: '150px',
+								objectFit: 'scale-down',
 								borderRadius: '4px 4px 0 0'
+							}}
+							onClick={handleSessionEndClick}
+							onPointerDown={(e) => {
+								e.stopPropagation()
+								e.preventDefault()
 							}}
 						/>
 					)}
@@ -409,10 +447,25 @@ export class CardShapeUtil extends ShapeUtil<ICardShape> {
 						)}
 
 						{/* Details section */}
-						{layout.details && shape.props.details && (
-							<div style={{ marginTop: '0px' }}>
-								<MarkdownText content={shape.props.details} />
-							</div>
+						{layout.details && (
+							<Textarea
+								size="sm"
+								mt={0}
+								variant="unstyled"
+								placeholder="field: value..."
+								value={shape.props.details}
+								onChange={handleDetailsChange}
+								minRows={1}
+								autosize
+								readOnly={(isSessionEndMode || isHistoryView)}
+								styles={{
+									input: {
+										padding: 0,
+										cursor: (isSessionEndMode || isHistoryView) ? 'pointer' : 'text',
+										fontSize: '0.8rem',
+									}
+								}}
+							/>
 						)}
 
 						{/* Fluid type checking errors */}
@@ -436,7 +489,33 @@ export class CardShapeUtil extends ShapeUtil<ICardShape> {
 						)}
 					</div>
 					
-					{/* Card type label - bottom left */}
+					{/* Typecheck status/button - bottom left */}
+					<div
+						style={{
+							position: 'absolute',
+							bottom: '4px',
+							left: '6px',
+							display: 'flex',
+							alignItems: 'center',
+						}}
+					>
+						{shape.props.typecheckSuccess === true ? (
+							// Green checkmark for successful typecheck
+							<div
+								style={{
+									color: '#51cf66',
+									fontSize: '16px',
+									fontWeight: 'bold',
+									opacity: 0.8,
+								}}
+								title="Type check passed"
+							>
+								✓
+							</div>
+						) : null}
+					</div>
+					
+					{/* Card type label - bottom right */}
 					<div
 						style={{
 							position: 'absolute',

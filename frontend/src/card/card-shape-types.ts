@@ -19,5 +19,6 @@ export type ICardShape = TLBaseShape<
 		createdAt?: number, // seconds since session start
 		fluidErrors?: string[], // fluid type checking errors
 		lastValidationValue?: string, // cached hash of card for change detection
+		typecheckSuccess?: boolean, // whether typecheck passed successfully
 	}
 >

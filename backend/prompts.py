@@ -1,5 +1,5 @@
-
-def create_card_generation_prompt(intention: str, board_json: str, available_types: list[str]) -> str:
+# %%
+def create_card_generation_prompt(intention: str, board_json: str, available_types: list[str], pydantic_classes_description: str) -> str:
     """
     Create a complete prompt for card generation including user intention and constraints.
     
@@ -19,7 +19,30 @@ Global user's thinking goal: {intention}
 {board_json}
 
 ## Answer format
-You must respond with one of the following card types: {', '.join(available_types)} following the json format.
+You must respond with one of the following card types: [{', '.join(available_types)}] following the json format.
+
+
+Example output:
+
+{{
+    "title": "...",
+    "body": "..."
+    "image": {{
+        "prompt": "...",
+        "base64": "",
+    }}
+}}
+
+## Json format
+
+{pydantic_classes_description}
+
+## Image instruction
+
+If you are generating an image prompt in your output, only generate prompts for photography, or piece of art.
+Image featuring text or diagram are not allowed. Add stylistic instruction depending on the image you are aiming to generate.
+
+If the image field is optional, only add an image if it is clear that a visual illustration is releavnt. In doubt, don't include an image (simply return null for the image).
 
 ## Board instructions
 * Generate a card that is one of these specific types, not a generic Card. 
@@ -30,3 +53,8 @@ You must respond with one of the following card types: {', '.join(available_type
 
 The card should be relevant to the user's stated intention: "{intention}"
 """
+
+# %%
+
+
+# %%

@@ -10,6 +10,9 @@ import subprocess
 import tempfile
 import json
 import inspect
+import re
+import base64
+import httpx
 from typing import Optional, Dict, Any, Type, Union, get_args, get_origin, Annotated, Literal, List
 
 from fastapi import FastAPI, HTTPException
@@ -20,23 +23,50 @@ import litellm
 from litellm import completion, acompletion
 from prompts import create_card_generation_prompt
 from pprint import pprint
-from card_model import Card, Image, Example, Idea, Question
 from pydantic import BaseModel, Field, create_model
-from pydantic_ai import Agent
+from pydantic_ai import Agent, UnexpectedModelBehavior
 from pydantic_ai.models.google import GoogleModel, GoogleModelSettings
-
+import json
+import logfire
 import nest_asyncio
+from runware import Runware, IImageInference
 nest_asyncio.apply()
 
 
-PYDANTIC_MODEL_NAME = 'groq:openai/gpt-oss-20b'
-FAST_MODEL_NAME = "groq/llama3-70b-8192"
+logfire.configure()  
+logfire.instrument_pydantic_ai() 
+
+PYDANTIC_MODEL_NAME = "groq:llama-3.3-70b-versatile" # 'groq:openai/gpt-oss-120b'
+FAST_MODEL_NAME = "groq/llama-3.3-70b-versatile"
 
 # Available colors for card types (will cycle through these)
 AVAILABLE_COLORS = [
     'blue', 'green', 'pink', 'orange', 'violet', 
     'cyan', 'yellow', 'indigo', 'teal', 'lime', 'grape'
 ]
+
+DEFAULT_CARD_WIDTH = 250
+DEFAULT_CARD_HEIGHT = 200
+DEFAULT_CARD_PADDING = 5
+
+IMAGE_WIDTH = 512
+IMAGE_HEIGHT = 256
+
+class Image(BaseModel):
+    """Represents an image with URL and optional metadata."""
+    prompt: str = Field(..., description="The prompt of the image to be given to an AI image generator.")
+    source: Optional[str] = Field(None, description="The url or base64 content of the image. Empty at the creation stage.")
+    
+class Card(BaseModel):
+    """A card from the whiteboard"""
+    title: Optional[str] = Field(None, description="A short title defining the card")
+    body: Optional[str] = Field(None, description="The body of the card.")
+    image: Optional[Image] = Field(None, description="An image illustrating the card.")
+    #visible: bool = Field(False, description="Whether the card is visible on the whiteboard. Default to False when generating a new card, as the card is not placed yet.")
+    w: float
+    h: float
+    x: float
+    y: float
 
 # Removed global store - card types are now executed fresh each time
 
@@ -235,7 +265,6 @@ def pydantic_to_react_layout(pydantic_classes: Dict[str, Type[BaseModel]]) -> Di
                 layout['details'] = True
 
             layouts[class_name] = layout
-            print(f"Generated layout for {class_name}: {layout}")
             
         except Exception as e:
             print(f"Error processing {class_name}: {e}")
@@ -262,7 +291,6 @@ def pydantic_to_react_layout(pydantic_classes: Dict[str, Type[BaseModel]]) -> Di
                         layout[field_name] = False
             
             layouts[class_name] = layout
-            print(f"Fallback layout for {class_name}: {layout}")
     
     return {
         'colors': colors,
@@ -286,14 +314,11 @@ def pydantic_to_react_content(pydantic_card: Card) -> list[ReactCard]:
         # Get the card type name from the class
         card_type = card.__class__.__name__
         
-        # Handle image field - convert Image object to base64 string if present
+        # Handle image field - convert Image object to source string if present
         image_str = ""
         if hasattr(card, 'image') and card.image:
             if isinstance(card.image, Image):
-                image_str = card.image.base64 or ""
-            else:
-                # If it's already a string, use it directly
-                image_str = str(card.image) if card.image else ""
+                image_str = card.image.prompt or ""
         
         # Get base Card fields
         base_card_fields = set(Card.model_fields.keys())
@@ -322,7 +347,7 @@ def pydantic_to_react_content(pydantic_card: Card) -> list[ReactCard]:
                 nested_card = process_card(field_value, is_root=False)
                 cards.append(nested_card)
                 # Add reference in details
-                details_parts.append(f"**{field_name}**: [Nested card: {field_value.__class__.__name__}]")
+                details_parts.append(f"{field_name}: [Nested card: {field_value.__class__.__name__}]")
             elif isinstance(field_value, list):
                 # Handle list of potential Card instances
                 nested_cards_found = []
@@ -333,13 +358,13 @@ def pydantic_to_react_content(pydantic_card: Card) -> list[ReactCard]:
                         nested_cards_found.append(item.__class__.__name__)
                 
                 if nested_cards_found:
-                    details_parts.append(f"**{field_name}**: [Nested cards: {', '.join(nested_cards_found)}]")
+                    details_parts.append(f"{field_name}: [Nested cards: {', '.join(nested_cards_found)}]")
                 else:
                     # Regular list field
-                    details_parts.append(f"**{field_name}**: {field_value}")
+                    details_parts.append(f"{field_name}: {field_value}")
             else:
                 # Regular additional field
-                details_parts.append(f"**{field_name}**: {field_value}")
+                details_parts.append(f"{field_name}: {field_value}")
         
         # Combine all details
         final_details = '\n'.join(details_parts) if details_parts else ''
@@ -360,6 +385,21 @@ def pydantic_to_react_content(pydantic_card: Card) -> list[ReactCard]:
     # Process the root card
     root_card = process_card(pydantic_card)
     cards.insert(0, root_card)  # Root card goes first
+    
+    # Post-processing: Set all cards to 200x150 size and organize in column if multiple cards
+    if cards:
+        # Get the position of the first card as the base position
+        base_x = cards[0].x
+        base_y = cards[0].y
+        
+        for i, card in enumerate(cards):
+            card.w = DEFAULT_CARD_WIDTH
+            card.h = DEFAULT_CARD_HEIGHT
+            
+            # If multiple cards, organize in column with spacing of 5
+            if len(cards) > 1:
+                card.x = base_x  # Align all cards to the first card's x position
+                card.y = base_y + i * (DEFAULT_CARD_HEIGHT + DEFAULT_CARD_PADDING)  # Stack vertically with 5-unit spacing from first card's y
     
     return cards
 
@@ -414,7 +454,6 @@ def get_card_types_from_code(code: str) -> tuple[bool, str, Dict[str, Type[Card]
                 issubclass(obj, Card) and 
                 obj is not Card):
                 pydantic_classes[name] = obj
-                print(json.dumps(obj.schema(), indent=2))
         
         if not pydantic_classes:
             return False, "No card type classes found. Define classes that inherit from Card.", {}
@@ -455,7 +494,7 @@ def cast_react_card_to_pydantic(react_card: ReactCard, card_types: Dict[str, Typ
         'h': react_card.h,
         'x': react_card.x,
         'y': react_card.y,
-        'visible': True,  # Default visible to True
+        #'visible': True,  # Default visible to True
     }
     
     # Get model fields to understand expected types
@@ -481,12 +520,109 @@ def cast_react_card_to_pydantic(react_card: ReactCard, card_types: Dict[str, Typ
     # Handle image field
     if 'image' in model_fields:
         field_info = model_fields['image']
-        if react_card.image:
+        if react_card.image is not None:
             # Create Image object from base64 string
-            card_data['image'] = Image(description="", base64=react_card.image)
+            card_data['image'] = Image(prompt="", source=react_card.image)
         elif field_info.default is ...:  # Required field
             # Create empty Image object for required image fields
-            card_data['image'] = Image(description="Auto-generated placeholder", base64="")
+            card_data['image'] = Image(prompt="Auto-generated placeholder", source="")
+        else:
+            card_data['image'] = None
+    
+    # Parse details field for additional fields in field_name: value format
+    processed_details = react_card.details
+    if react_card.details:
+        details_pattern = r'(\w+):\s*(.+?)(?=\n\w+:|$)'
+        matches = re.findall(details_pattern, react_card.details, re.DOTALL)
+        patterns_to_remove = []
+        
+        for field_name, field_value in matches:
+            field_value = field_value.strip()
+            
+            # Skip if field is not in the model
+            if field_name not in model_fields:
+                continue
+                
+            field_info = model_fields[field_name]
+            field_type = field_info.annotation
+
+            patterns_to_remove.append(f"{field_name}: {field_value}")
+            patterns_to_remove.append(f"{field_name}:{field_value}")
+            
+            # Skip if field is a Card object or list of Cards (as requested)
+            if (inspect.isclass(field_type) and issubclass(field_type, Card)):
+                card_data[field_name] = None
+                continue
+            
+            if (get_origin(field_type) is list and get_args(field_type) and 
+                inspect.isclass(get_args(field_type)[0]) and issubclass(get_args(field_type)[0], Card)):
+                card_data[field_name] = []
+                continue
+            
+            # Skip references to nested cards
+            if field_value.startswith('[Nested card') or field_value.startswith('[Nested cards'):
+                card_data[field_name] = []
+                continue
+            
+            # Try to cast the value to the expected type
+            try:
+                # Handle Optional types
+                origin = get_origin(field_type)
+                if origin is Union:
+                    args = get_args(field_type)
+                    # Check if it's Optional (Union with None)
+                    if len(args) == 2 and type(None) in args:
+                        # Get the non-None type
+                        actual_type = args[0] if args[1] is type(None) else args[1]
+                    else:
+                        actual_type = field_type
+                else:
+                    actual_type = field_type
+                
+                # Cast to appropriate type
+                if actual_type == str:
+                    card_data[field_name] = field_value
+                elif actual_type == int:
+                    card_data[field_name] = int(field_value)
+                elif actual_type == float:
+                    card_data[field_name] = float(field_value)
+                elif actual_type == bool:
+                    card_data[field_name] = field_value.lower() in ('true', 't', '1', 'yes', 'y')
+                elif get_origin(actual_type) is list:
+                    # Handle simple lists (not Card lists)
+                    list_item_type = get_args(actual_type)[0] if get_args(actual_type) else str
+                    if list_item_type == str:
+                        # Try parsing as JSON array or comma-separated values
+                        try:
+                            card_data[field_name] = json.loads(field_value)
+                        except:
+                            card_data[field_name] = [item.strip() for item in field_value.split(',')]
+                else:
+                    # For other types, keep as string
+                    card_data[field_name] = field_value
+
+                    
+            except (ValueError, TypeError) as e:
+                # If casting fails, skip this field
+                raise ValueError(f"Failed to cast field {field_name} to {field_type}: {e}")
+        
+        # Remove processed patterns from details
+        for pattern in patterns_to_remove:
+            processed_details = processed_details.replace(pattern, "").strip()
+        
+        # Clean up extra newlines and whitespace
+        processed_details = re.sub(r'\n\s*\n+', '\n', processed_details).strip()
+        
+        # Update the details field with remaining content
+        if 'details' in model_fields and processed_details:
+            card_data['details'] = processed_details
+        elif 'details' in model_fields:
+            # Set to empty string or None based on field requirements
+            field_info = model_fields['details']
+            if field_info.default is ...:  # Required field
+                card_data['details'] = ""
+            else:
+                card_data['details'] = None
     
     # Create instance of the correct card type
     return card_type_class(**card_data)
@@ -502,9 +638,9 @@ Field: {field_name}
 Value: {field_value}
 Description: {field_description}
 
-Please provide a score from 1 to 10 and reasoning for your score. Be strict but fair in your evaluation."""
+Please provide a score from 1 to 10 and reasoning for your score. Be strict but fair in your evaluation. 
+If the description is empty, be less strict and rely on the field name to judge."""
 
-    print(prompt)
     try:
         # Use async completion with structured output
         response = await acompletion(
@@ -514,20 +650,13 @@ Please provide a score from 1 to 10 and reasoning for your score. Be strict but 
                 "content": prompt
             }],
             max_tokens=200,
-            temperature=0.3,
-            response_format={
-                "type": "json_schema",
-                "json_schema": {
-                    "name": "field_validation",
-                    "schema": FluidTypeCheckLLMResponse.model_json_schema()
-                }
-            }
+            temperature=0.0,
+            response_format=FluidTypeCheckLLMResponse
         )
         
         content = response.choices[0].message.content.strip()
         
         # Parse the structured JSON response
-        import json
         llm_result = json.loads(content)
         validated_result = FluidTypeCheckLLMResponse(**llm_result)
         
@@ -545,16 +674,88 @@ Please provide a score from 1 to 10 and reasoning for your score. Be strict but 
         )
 
 
+def has_nested_card_fields(card_type_class: Type[Card]) -> bool:
+    """
+    Check if a card type has any fields that are Card objects or lists of Card objects.
+    """
+    model_fields = card_type_class.model_fields
+    
+    for field_name, field_info in model_fields.items():
+        field_type = field_info.annotation
+        
+        # Skip layout fields
+        if field_name in {'w', 'h', 'x', 'y', 'visible'}:
+            continue
+            
+        # Check if field is a Card object
+        if inspect.isclass(field_type) and issubclass(field_type, Card):
+            return True
+            
+        # Check if field is a list of Card objects
+        if (get_origin(field_type) is list and get_args(field_type) and 
+            inspect.isclass(get_args(field_type)[0]) and issubclass(get_args(field_type)[0], Card)):
+            return True
+            
+        # Handle Optional types (Union with None)
+        if get_origin(field_type) is Union:
+            args = get_args(field_type)
+            for arg in args:
+                if arg is not type(None):  # Skip None type
+                    # Check if the non-None type is a Card
+                    if inspect.isclass(arg) and issubclass(arg, Card):
+                        return True
+                    # Check if the non-None type is a list of Cards
+                    if (get_origin(arg) is list and get_args(arg) and 
+                        inspect.isclass(get_args(arg)[0]) and issubclass(get_args(arg)[0], Card)):
+                        return True
+    
+    return False
+
+
+async def generate_image_with_runware(prompt: str) -> str:
+    """
+    Generate an image using Runware API and return as base64 data URL.
+    
+    Args:
+        prompt: The text prompt for image generation
+        
+    Returns:
+        Base64 data URL string for the generated image
+    """
+    try:
+        # Initialize Runware client
+        runware = Runware(api_key=os.environ["RUNWARE_API_KEY"])
+        await runware.connect()
+        
+        # Create image generation request
+        request = IImageInference(
+            positivePrompt=prompt,
+            model="runware:101@1",
+            width=IMAGE_WIDTH,  # Smaller size for card images
+            height=IMAGE_HEIGHT
+        )
+        
+        # Generate image
+        images = await runware.imageInference(requestImage=request)
+        
+        if images and len(images) > 0:
+            image_url = images[0].imageURL
+            return image_url
+        else:
+            print("No images generated")
+            return ""
+            
+    except Exception as e:
+        print(f"Error generating image with Runware: {e}")
+        return ""
+
+
 async def perform_fluid_type_checking(card: Card, card_types: Dict[str, Type[Card]]) -> FluidTypeCheckingResponse:
     """
     Perform fluid type checking on a Card instance.
     """
     card_type_name = card.__class__.__name__
     schema_dict = card_types[card_type_name].schema()
-
-    # Pretty-print JSON schema
-    print(json.dumps(schema_dict, indent=2))
-    
     
     # Get field information from the model
     model_fields = card.model_fields
@@ -565,12 +766,10 @@ async def perform_fluid_type_checking(card: Card, card_types: Dict[str, Type[Car
     
     field_scores = {}
     errors = []
-    print("model field", model_fields)
     
     # Process each field
     for field_name, field_info in model_fields.items():
         # Skip layout fields
-        print("description", model_fields[field_name])
         if field_name in skip_fields:
             continue
             
@@ -621,17 +820,27 @@ async def fluid_type_checking(request: FluidTypeCheckingRequest):
         if not card_types:
             raise HTTPException(status_code=400, detail="No card types found in sidepanel code")
         
-        # Handle different input types
+        # Check for nested card types first
         if isinstance(request.card, ReactCard):
+            card_type_name = request.card.card_type
+            card_type_class = card_types.get(card_type_name)
+            
+            # Nested card types coming from ReactCards are not supported yet. Need to implement card reference in the
+            if card_type_class and has_nested_card_fields(card_type_class):
+                return FluidTypeCheckingResponse(
+                    errors=[],
+                    field_scores={}
+                )
+            
             # Cast ReactCard to the correct Pydantic card type
             pydantic_card = cast_react_card_to_pydantic(request.card, card_types)
         else:
             # Already a Card instance
             pydantic_card = request.card
+            card_type_class = card_types.get(pydantic_card.__class__.__name__)
         
         # Perform fluid type checking
         result = await perform_fluid_type_checking(pydantic_card, card_types)
-        print("typechecking", result)
         return result
         
     except ValueError as e:
@@ -683,13 +892,15 @@ async def generate_card(request: BoardState):
         
         # Create a prompt that includes the available card types and user intention
         available_types = list(card_types.keys())
+
+
+        card_descriptions = [f"**{name}**\n\n {pydantic_type.schema()}" for name, pydantic_type in card_types.items()]
         prompt = create_card_generation_prompt(
             intention=request.intention,
-            board_json=request.model_dump_json(indent=2),
-            available_types=available_types
+            board_json=str(request.cards),
+            available_types=available_types,
+            pydantic_classes_description=str(card_descriptions)
         )
-        
-        print(f"Available card types for generation: {available_types}")
 
 
         # Build the union type
@@ -700,17 +911,48 @@ async def generate_card(request: BoardState):
             PYDANTIC_MODEL_NAME,
             output_type=card_type_classes, 
         )
-
-        result = await agent.run(prompt)
+        try:
+            result = agent.run_sync(prompt)
+        except UnexpectedModelBehavior:
+            print("unexpected behavior!")
+            raise
 
         pydantic_card = result.output
-        
-        print(f"Successfully generated card of type {type(pydantic_card).__name__}: {pydantic_card}")
-        
-        # Convert to ReactCard(s) - this now returns a list
+
+        print("card", pydantic_card)
+
+        # Convert to ReactCard(s)
         generated_cards = pydantic_to_react_content(pydantic_card)
-        print(f"Successfully generated {len(generated_cards)} card(s): {generated_cards}")
-        
+
+        print("generated_cards", generated_cards)
+        # Apply fluid typechecking to the output
+        for card in generated_cards:
+
+            validation_result = None
+            try:
+                validation_result = await fluid_type_checking(FluidTypeCheckingRequest(card=card, sidepanel_code=request.sidepanel_code))
+            except Exception as e:
+                print(f"Error performing fluid type checking on generated pydantic card: {e}")
+                raise HTTPException(status_code=500, detail=f"Failed to run fluid typechecking: {str(e)}")
+
+            assert validation_result is not None
+            if len(validation_result.errors) > 0:
+                print(f"Error performing fluid type checking on generated pydantic card: {validation_result.errors}")
+                raise HTTPException(status_code=400, detail=f"Fluid Typechecking error: {validation_result.errors}")
+
+
+        for card in generated_cards:
+            if hasattr(card, "image") and getattr(card, "image") is not None:
+                img_prompt = card.image #card.image has been casted from pydantic to react so it contains the prompt
+
+                print(f"Generating image for prompt: {img_prompt}")
+                generated_image_url = await generate_image_with_runware(img_prompt)
+                if generated_image_url:
+                    card.image = generated_image_url
+                    print(f"Image generated successfully and assigned to card {generated_image_url}")
+
+
+
         return generated_cards
         
     except Exception as e:
@@ -749,9 +991,6 @@ async def execute_code(request: CodeExecutionRequest):
         layouts = react_config['layouts']
         
         if not isinstance(colors, dict) or not isinstance(layouts, dict):
-            print("color", isinstance(colors, dict))
-            print("layout", isinstance(layouts, dict))
-            print("error", colors)
             return CodeExecutionResponse(
                 success=False,
                 error="Invalid configuration format generated"

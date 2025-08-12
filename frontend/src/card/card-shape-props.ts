@@ -16,4 +16,5 @@ export const cardShapeProps: RecordProps<ICardShape> = {
 	createdAt: T.optional(T.number),
 	fluidErrors: T.optional(T.arrayOf(T.string)),
 	lastValidationValue: T.optional(T.string),
+	typecheckSuccess: T.optional(T.boolean),
 }
