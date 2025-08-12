@@ -55,7 +55,8 @@ export function useTldrawEvents(
 						props: {
 							title: '',
 							body: '',
-							image: '',
+							img_prompt: '',
+							img_source: '',
 							details: '',
 							card_type: selectedCardType,
 							createdAt: creationTime,

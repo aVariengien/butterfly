@@ -14,23 +14,24 @@ export const SidePanel: React.FC<SidePanelProps> = ({ onUpdateTypes, onCodeChang
   const [isCollapsed, setIsCollapsed] = useState(false)
   const [currentCode, setCurrentCode] = useState(`# Define your card types using Pydantic classes
 # Each class should inherit from Card
-# Available: Card, Image, BaseModel, Field, Optional
+# Available: Card, BaseModel, Field, Optional
 
 class Example(Card):
     """A concrete example."""
-    title: str = Field(..., description="A short title (<4 words) defining the card")
+    title: str = Field(..., description="A short title defining the card")
     body: str = Field(..., description="The body of the example, in 1-2 sentences.")
     details: Optional[str] = Field("", description="Additional details when more space is needed.")
-    image: Optional[Image] = Field(..., description="An image illustrating the Example.")
+    img_prompt: str = Field(..., description="Text prompt for generating an image for this example")
+    img_source: Optional[str] = Field(None, description="URL or base64 data of the example's image")
 
 class Idea(Card):
     """A card representing a concrete idea."""
-    title: str = Field(..., description="A short title (<4 words) defining the card")
+    title: str = Field(..., description="A short title defining the card")
     body: str = Field(..., description="The short description of the idea in 1-2 sentences.")
 
 class Question(Card):
     """A card representing a question."""
-    title: str = Field(..., description="A short title (<4 words) defining the card")
+    title: str = Field(..., description="A short title defining the card")
     body: None  # No body for questions
 
 class Task(Card):
@@ -143,7 +144,7 @@ class Task(Card):
               loading={isLoading}
               disabled={isLoading}
             >
-              {isLoading ? 'Executing...' : 'Update Types'}
+              {isLoading ? 'Executing...' : 'Update Types (Ctrl+Enter)'}
             </Button>
 
             {/* Error Display */}
@@ -166,6 +167,12 @@ class Task(Card):
                 language="python"
                 placeholder="Python code for the card type definition ..."
                 onChange={(evn) => setCurrentCode(evn.target.value)}
+                onKeyDown={(evn) => {
+                  if (evn.key === 'Enter' && (evn.ctrlKey || evn.metaKey)) {
+                    evn.preventDefault()
+                    handleExecuteCode()
+                  }
+                }}
                 rehypePlugins={[
                   [rehypePrismPlus, { showLineNumbers: true }]
                 ]}

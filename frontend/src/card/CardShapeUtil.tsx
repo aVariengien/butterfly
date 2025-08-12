@@ -14,7 +14,7 @@ import { getSelectedCardType } from './card-state'
 import { getCardTypeColor, getCardTypeLayout } from '../utils/dynamicCardConfig'
 import classes from '../styles/card.module.css'
 import { useSessionContext } from '../contexts/SessionContext'
-import { performFluidTypeChecking } from '../services/cardApiService'
+import { performFluidTypeChecking, generateImageForCard } from '../services/cardApiService'
 
 // Session start time for consistent timestamp calculation
 const SESSION_START_TIME = Date.now()
@@ -102,7 +102,8 @@ export class CardShapeUtil extends ShapeUtil<ICardShape> {
 			color: 'blue',
 			body: '',
 			title: '',
-			image: '',
+			img_prompt: '',
+			img_source: '',
 			details: 'This is additional detail information that can be expanded.',
 			card_type: selectedCardType,
 			createdAt: creationTime,
@@ -198,19 +199,77 @@ export class CardShapeUtil extends ShapeUtil<ICardShape> {
 			})
 		}
 
-		const handleDetailsFocus = (event?: React.MouseEvent) => {
-			if (isSessionEndMode || isHistoryView) return
-			if (event) {
-				event.stopPropagation()
-				event.preventDefault()
-			}
-			setIsDetailsEditing(true)
-			console.log("details editing", shape.props.details)
-		}
-
-		const handleDetailsBlur = () => {
+		const handleDetailsBlur = async () => {
 			if (isSessionEndMode || isHistoryView) return
 			setIsDetailsEditing(false)
+			
+			// Check for img_prompt in details and generate image if changed
+			const details = shape.props.details || ''
+			const imgPromptMatch = details.match(/img_prompt:\s*(.+?)(?=\n|$)/)
+			
+			if (imgPromptMatch) {
+				const detailsPrompt = imgPromptMatch[1].trim()
+				const currentPrompt = shape.props.img_prompt || ''
+				
+				// If prompt is empty, delete the image
+				if (!detailsPrompt && (currentPrompt || shape.props.img_source)) {
+					console.log('Deleting image (empty prompt)')
+					this.editor.updateShape<ICardShape>({
+						id: shape.id,
+						type: shape.type,
+						props: {
+							...shape.props,
+							img_prompt: '',
+							img_source: '',
+						},
+					})
+				}
+				// Only generate if prompt changed and is not empty
+				else if (detailsPrompt && detailsPrompt !== currentPrompt) {
+					console.log('Generating image for prompt:', detailsPrompt)
+					
+					try {
+						const imageUrl = await generateImageForCard(detailsPrompt)
+						if (imageUrl) {
+							// Update card with new img_prompt and img_source
+							this.editor.updateShape<ICardShape>({
+								id: shape.id,
+								type: shape.type,
+								props: {
+									...shape.props,
+									img_prompt: detailsPrompt,
+									img_source: imageUrl,
+								},
+							})
+							console.log('Image generated and card updated')
+						}
+					} catch (error) {
+						console.error('Failed to generate image:', error)
+					}
+				}
+				if (!detailsPrompt) {
+					this.editor.updateShape<ICardShape>({
+						id: shape.id,
+						type: shape.type,
+						props: {
+							...shape.props,
+							img_prompt: "",
+							img_source: "",
+						},
+					})
+				}
+			}
+			else {
+				this.editor.updateShape<ICardShape>({
+					id: shape.id,
+					type: shape.type,
+					props: {
+						...shape.props,
+						img_prompt: "",
+						img_source: "",
+					},
+				})
+			}
 		}
 
 		// Create card hash for change detection
@@ -220,7 +279,8 @@ export class CardShapeUtil extends ShapeUtil<ICardShape> {
 				body: cardProps.body || '', 
 				details: cardProps.details || '',
 				card_type: cardProps.card_type || '',
-				image: cardProps.image || '',
+				img_prompt: cardProps.img_prompt || '',
+				img_source: cardProps.img_source || '',
 				code: code || ''
 			}
 			return btoa(JSON.stringify(content))
@@ -379,10 +439,10 @@ export class CardShapeUtil extends ShapeUtil<ICardShape> {
 					)}
 					
 					{/* Image banner */}
-					{layout.image && shape.props.image && (
+					{layout.image && shape.props.img_source && (
 						<Image
 							alt="Card image"
-							src={shape.props.image}
+							src={shape.props.img_source}
 							style={{
 								width: '100%',
 								maxHeight: '150px',
@@ -454,6 +514,7 @@ export class CardShapeUtil extends ShapeUtil<ICardShape> {
 								variant="unstyled"
 								placeholder="field: value..."
 								value={shape.props.details}
+								onBlur={handleDetailsBlur}
 								onChange={handleDetailsChange}
 								minRows={1}
 								autosize

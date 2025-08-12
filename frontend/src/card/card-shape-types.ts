@@ -12,7 +12,8 @@ export type ICardShape = TLBaseShape<
 		color: TLDefaultColorStyle,
 		title: string,
 		body: string,
-		image?: string, // base64 image data
+		img_prompt?: string, // text prompt for image generation
+		img_source?: string, // URL or base64 image data
 		details?: string, // expandable details text
 		card_type: string,
 		toValidate?: boolean, // flag to show accept/reject buttons

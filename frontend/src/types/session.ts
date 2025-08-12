@@ -7,7 +7,8 @@ export interface GeneratedCard {
 	y: number
 	title: string
 	body: string
-	image?: string
+	img_prompt?: string
+	img_source?: string
 	details?: string
 	card_type: string
 	createdAt?: number

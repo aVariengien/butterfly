@@ -36,7 +36,7 @@ nest_asyncio.apply()
 logfire.configure()  
 logfire.instrument_pydantic_ai() 
 
-PYDANTIC_MODEL_NAME = "groq:llama-3.3-70b-versatile" # 'groq:openai/gpt-oss-120b'
+PYDANTIC_MODEL_NAME = "openai:gpt-5-mini-2025-08-07" # 'groq:openai/gpt-oss-120b'
 FAST_MODEL_NAME = "groq/llama-3.3-70b-versatile"
 
 # Available colors for card types (will cycle through these)
@@ -52,16 +52,12 @@ DEFAULT_CARD_PADDING = 5
 IMAGE_WIDTH = 512
 IMAGE_HEIGHT = 256
 
-class Image(BaseModel):
-    """Represents an image with URL and optional metadata."""
-    prompt: str = Field(..., description="The prompt of the image to be given to an AI image generator.")
-    source: Optional[str] = Field(None, description="The url or base64 content of the image. Empty at the creation stage.")
-    
 class Card(BaseModel):
     """A card from the whiteboard"""
     title: Optional[str] = Field(None, description="A short title defining the card")
     body: Optional[str] = Field(None, description="The body of the card.")
-    image: Optional[Image] = Field(None, description="An image illustrating the card.")
+    img_prompt: Optional[str] = Field(None, description="The text prompt for generating an image for this card")
+    img_source: Optional[str] = Field(None, description="The URL or base64 data of the card's image")
     #visible: bool = Field(False, description="Whether the card is visible on the whiteboard. Default to False when generating a new card, as the card is not placed yet.")
     w: float
     h: float
@@ -161,7 +157,8 @@ class ReactCard(BaseModel): # React card, the type that is sent back to the fron
     title: str
     body: str
     card_type: str
-    image: Optional[str] #base64 image
+    img_prompt: Optional[str] = None
+    img_source: Optional[str] = None
     details: Optional[str]
     createdAt: Optional[float] = None  # seconds since session start
     
@@ -243,7 +240,7 @@ def pydantic_to_react_layout(pydantic_classes: Dict[str, Type[BaseModel]]) -> Di
             }
             
             # Check each field to determine visibility
-            for field_name in ['image', 'title', 'body', 'details']:
+            for field_name in ['title', 'body', 'details']:
                 if field_name in model_fields:
                     field_info = model_fields[field_name]
                     
@@ -257,6 +254,11 @@ def pydantic_to_react_layout(pydantic_classes: Dict[str, Type[BaseModel]]) -> Di
                     
                     # Field is visible if it's present and not None-only
                     layout[field_name] = not is_none_only
+            
+            # Check for image fields - show image layout if either img_prompt or img_source exists
+            has_img_prompt = 'img_prompt' in model_fields
+            has_img_source = 'img_source' in model_fields
+            layout['image'] = has_img_prompt or has_img_source
             
             # If there is a field in model_fields that is not in the default Card fields, set details=True
             default_card_fields = set(Card.model_fields.keys())
@@ -279,7 +281,7 @@ def pydantic_to_react_layout(pydantic_classes: Dict[str, Type[BaseModel]]) -> Di
             # Try to be smarter about the fallback by checking annotations
             if hasattr(pydantic_class, '__annotations__'):
                 annotations = pydantic_class.__annotations__
-                for field_name in ['image', 'title', 'body', 'details']:
+                for field_name in ['title', 'body', 'details']:
                     if field_name in annotations:
                         # Check if the annotation suggests None
                         annotation_str = str(annotations[field_name])
@@ -289,6 +291,11 @@ def pydantic_to_react_layout(pydantic_classes: Dict[str, Type[BaseModel]]) -> Di
                             layout[field_name] = False
                     else:
                         layout[field_name] = False
+                
+                # Check for image fields
+                has_img_prompt = 'img_prompt' in annotations
+                has_img_source = 'img_source' in annotations
+                layout['image'] = has_img_prompt or has_img_source
             
             layouts[class_name] = layout
     
@@ -314,11 +321,9 @@ def pydantic_to_react_content(pydantic_card: Card) -> list[ReactCard]:
         # Get the card type name from the class
         card_type = card.__class__.__name__
         
-        # Handle image field - convert Image object to source string if present
-        image_str = ""
-        if hasattr(card, 'image') and card.image:
-            if isinstance(card.image, Image):
-                image_str = card.image.prompt or ""
+        # Handle image fields directly
+        img_prompt = getattr(card, 'img_prompt', '') or ''
+        img_source = getattr(card, 'img_source', '') or ''
         
         # Get base Card fields
         base_card_fields = set(Card.model_fields.keys())
@@ -377,7 +382,8 @@ def pydantic_to_react_content(pydantic_card: Card) -> list[ReactCard]:
             title=getattr(card, 'title', '') or '',
             body=getattr(card, 'body', '') or '',
             card_type=card_type,
-            image=image_str,
+            img_prompt=img_prompt,
+            img_source=img_source,
             details=final_details,
             createdAt=None  # Will be set by the frontend
         )
@@ -392,14 +398,21 @@ def pydantic_to_react_content(pydantic_card: Card) -> list[ReactCard]:
         base_x = cards[0].x
         base_y = cards[0].y
         
+        current_y = base_y
         for i, card in enumerate(cards):
-            card.w = DEFAULT_CARD_WIDTH
-            card.h = DEFAULT_CARD_HEIGHT
+            # Use larger size for cards with images
+            if card.img_prompt:
+                card.w = 300
+                card.h = 350
+            else:
+                card.w = DEFAULT_CARD_WIDTH
+                card.h = DEFAULT_CARD_HEIGHT
             
-            # If multiple cards, organize in column with spacing of 5
+            # If multiple cards, organize in column with proper spacing
             if len(cards) > 1:
                 card.x = base_x  # Align all cards to the first card's x position
-                card.y = base_y + i * (DEFAULT_CARD_HEIGHT + DEFAULT_CARD_PADDING)  # Stack vertically with 5-unit spacing from first card's y
+                card.y = current_y
+                current_y += card.h + DEFAULT_CARD_PADDING  # Accumulate y position based on actual card height
     
     return cards
 
@@ -435,7 +448,6 @@ def get_card_types_from_code(code: str) -> tuple[bool, str, Dict[str, Type[Card]
             'BaseModel': BaseModel,
             'Field': Field,  # Simplified Field for user code
             'Card': Card,  # Use Card instead of ReactCard for user definitions
-            'Image': Image,
             'Optional': Optional,  # Import Optional for type hints
             'Literal': Literal,  # Import Literal for literal type hints
         }
@@ -501,7 +513,7 @@ def cast_react_card_to_pydantic(react_card: ReactCard, card_types: Dict[str, Typ
     model_fields = card_type_class.model_fields
     
     # Handle each field based on its expected type in the target model
-    for field_name in ['title', 'body', 'details']:
+    for field_name in ['title', 'body', 'details', 'img_prompt', 'img_source']:
         react_value = getattr(react_card, field_name, '')
         
         if field_name in model_fields:
@@ -516,18 +528,6 @@ def cast_react_card_to_pydantic(react_card: ReactCard, card_types: Dict[str, Typ
             # If field is required but empty, include it anyway to get proper validation error
             elif field_info.default is ...:  # Required field
                 card_data[field_name] = react_value
-    
-    # Handle image field
-    if 'image' in model_fields:
-        field_info = model_fields['image']
-        if react_card.image is not None:
-            # Create Image object from base64 string
-            card_data['image'] = Image(prompt="", source=react_card.image)
-        elif field_info.default is ...:  # Required field
-            # Create empty Image object for required image fields
-            card_data['image'] = Image(prompt="Auto-generated placeholder", source="")
-        else:
-            card_data['image'] = None
     
     # Parse details field for additional fields in field_name: value format
     processed_details = react_card.details
@@ -762,7 +762,7 @@ async def perform_fluid_type_checking(card: Card, card_types: Dict[str, Type[Car
     
     
     # Fields to skip (layout/positioning fields)
-    skip_fields = {'w', 'h', 'x', 'y', 'visible'}
+    skip_fields = {'w', 'h', 'x', 'y', 'visible', 'img_prompt'}
     
     field_scores = {}
     errors = []
@@ -941,15 +941,14 @@ async def generate_card(request: BoardState):
                 raise HTTPException(status_code=400, detail=f"Fluid Typechecking error: {validation_result.errors}")
 
 
+        # Generate images for cards that have img_prompt but no img_source
         for card in generated_cards:
-            if hasattr(card, "image") and getattr(card, "image") is not None:
-                img_prompt = card.image #card.image has been casted from pydantic to react so it contains the prompt
-
-                print(f"Generating image for prompt: {img_prompt}")
-                generated_image_url = await generate_image_with_runware(img_prompt)
+            if card.img_prompt and not card.img_source:
+                print(f"Generating image for prompt: {card.img_prompt}")
+                generated_image_url = await generate_image_with_runware(card.img_prompt)
                 if generated_image_url:
-                    card.image = generated_image_url
-                    print(f"Image generated successfully and assigned to card {generated_image_url}")
+                    card.img_source = generated_image_url
+                    print(f"Image generated successfully and assigned to card: {generated_image_url}")
 
 
 
@@ -958,6 +957,16 @@ async def generate_card(request: BoardState):
     except Exception as e:
         print(f"Error in generate_card: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to generate card: {str(e)}")
+
+@app.post("/generate-image")
+async def generate_image_endpoint(request: dict):
+    """Generate an image from a text prompt."""
+    prompt = request.get("prompt", "")
+    if not prompt:
+        return {"success": False, "error": "No prompt provided"}
+    
+    image_url = await generate_image_with_runware(prompt)
+    return {"success": bool(image_url), "image_url": image_url}
 
 @app.post("/execute-code", response_model=CodeExecutionResponse)
 async def execute_code(request: CodeExecutionRequest):

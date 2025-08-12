@@ -58,7 +58,8 @@ export function useCardGeneration(
 								h: newCard.h,
 								title: newCard.title,
 								body: newCard.body,
-								image: newCard.image || '',
+								img_prompt: newCard.img_prompt || '',
+								img_source: newCard.img_source || '',
 								details: newCard.details || '',
 								card_type: newCard.card_type,
 								toValidate: true, // Mark card for validation

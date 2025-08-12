@@ -12,7 +12,8 @@ interface FluidTypeCheckingRequest {
 		title: string
 		body: string
 		card_type: string
-		image?: string
+		img_prompt?: string
+		img_source?: string
 		details?: string
 		createdAt?: number
 	}
@@ -41,7 +42,8 @@ export async function generateCard(editor: Editor, sidepanelCode: string, intent
 					title: props.title || '',
 					body: props.body || '',
 					card_type: props.card_type || '',
-					image: props.image || '',
+					img_prompt: props.img_prompt || '',
+					img_source: props.img_source || '',
 					details: props.details || '',
 					createdAt: props.createdAt || Math.floor((Date.now() - SESSION_START_TIME) / 1000)
 				}
@@ -88,7 +90,8 @@ function createCardHash(card: any): string {
 		body: card.body || '', 
 		details: card.details || '',
 		card_type: card.card_type || '',
-		image: card.image || ''
+		img_prompt: card.img_prompt || '',
+		img_source: card.img_source || ''
 	}
 	return btoa(JSON.stringify(content))
 }
@@ -116,7 +119,8 @@ export async function performFluidTypeChecking(
 			title: cardProps.title || '',
 			body: cardProps.body || '',
 			card_type: cardProps.card_type || '',
-			image: cardProps.image || '',
+			img_prompt: cardProps.img_prompt || '',
+			img_source: cardProps.img_source || '',
 			details: cardProps.details || '',
 			createdAt: cardProps.createdAt || Math.floor((Date.now() - SESSION_START_TIME) / 1000)
 		}
@@ -148,6 +152,30 @@ export async function performFluidTypeChecking(
 		return result.errors || []
 	} catch (error) {
 		console.error('Error performing fluid type checking:', error)
+		return null
+	}
+}
+
+// API function to generate an image from a prompt
+export async function generateImageForCard(prompt: string): Promise<string | null> {
+	try {
+		const response = await fetch('http://localhost:8000/generate-image', {
+			method: 'POST',
+			headers: {
+				'Content-Type': 'application/json',
+			},
+			body: JSON.stringify({ prompt }),
+		})
+
+		if (!response.ok) {
+			console.error('Image generation error:', response.status)
+			return null
+		}
+
+		const data = await response.json()
+		return data.success ? data.image_url : null
+	} catch (error) {
+		console.error('Error generating image:', error)
 		return null
 	}
 }
