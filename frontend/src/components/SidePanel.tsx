@@ -15,10 +15,11 @@ export const SidePanel: React.FC<SidePanelProps> = ({ onUpdateTypes, onCodeChang
   const [currentCode, setCurrentCode] = useState(`# Define your card types using Pydantic classes
 # Each class should inherit from Card
 # Use "user_only: bool = True" or "generation_only: bool = True" to restrict the card usage
+# Add the img_prompt field for image generation
 
 class Idea(Card):
     """Unconstrained idea"""
-    title: Optional[str] = Field(None, description="A short title defining the card")
+    title: None
     body: Optional[str] = Field(None, description="The body of the idea, unconstrained.")
     user_only: bool = True
     
@@ -32,8 +33,6 @@ class Example(Card):
     """A concrete example."""
     title: Optional[str] = Field(None, description="A short title defining the card")
     body: Optional[str] = Field(None, description="The body of the example, in 1-2 sentences.")
-    details: Optional[str] = Field("", description="Additional details when more space is needed.")
-
 
 class Image(Card):
     """A visual illustration to concretize."""
@@ -43,13 +42,13 @@ class Image(Card):
 
 class Question(Card):
     """A card representing a question."""
-    title: Optional[str] = Field(None, description="The question.")
+    title: Optional[str] = Field(None, description="The question. It should be short, interogative tone and finish with interogation point.")
     body: None
 
 class Claim(Card):
     """A card representing a claim."""
     title: Optional[str] = Field(None, description="A precise worded sentence making a claim. The claim should not be a tautology and should 'try to stick its head out'.'")
-    body: Optional[str] = Field(None, description="Space for short expansion on the claim, potentially relating to other cards.")
+    body: None
 
 class Property(Card):
     """A card representing a property that can vary in degree. A property need to be able to have more of X or less of X, or an example need to be more of X or less of X. To check if it's a property, you need to find an example where the natural sentence 'Example E is/has more X than example B' makes sense."""
@@ -57,6 +56,12 @@ class Property(Card):
     body: Optional[str] = Field(None, description="Short description.")
     low_example: Optional[str] = Field(None, description="The title of a card in the whiteboard that has low amount of the property")
     high_example: Optional[str] = Field(None, description="he title of a card in the whiteboard that has high amount of the property")
+
+
+class Metaphor(Card):
+    """A metaphor, or an intuition pump that translate some of the intuition to another domains."""
+    title: Optional[str] = Field(None, description="Short name for the metaphor")
+    body: Optional[str] = Field(None, description="The body of the metaphor. It should be a clearly worded")
 
 
 class ContrastingExamplePair(Card):

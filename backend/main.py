@@ -56,7 +56,6 @@ class Card(BaseModel):
     """A card from the whiteboard"""
     title: Optional[str] = Field(None, description="A short title defining the card")
     body: Optional[str] = Field(None, description="The body of the card.")
-    img_prompt: Optional[str] = Field(None, description="The text prompt for generating an image for this card")
     img_source: Optional[str] = Field(None, description="The URL or base64 data of the card's image")
     #visible: bool = Field(False, description="Whether the card is visible on the whiteboard. Default to False when generating a new card, as the card is not placed yet.")
     details: None
@@ -262,7 +261,7 @@ def pydantic_to_react_layout(pydantic_classes: Dict[str, Type[BaseModel]]) -> Di
             layout['image'] = has_img_prompt or has_img_source
             
             # If there is a field in model_fields that is not in the default Card fields, set details=True
-            default_card_fields = set(Card.model_fields.keys())
+            default_card_fields = set(list(Card.model_fields.keys()) + ["user_only" , "generation_only"]) 
             extra_fields = set(model_fields.keys()) - default_card_fields
             if extra_fields:
                 layout['details'] = True
