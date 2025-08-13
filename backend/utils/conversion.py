@@ -291,9 +291,27 @@ def cast_react_card_to_pydantic(react_card: ReactCard, card_types: Dict[str, Typ
                 card_data[field_name] = []
                 continue
             
-            # Skip references to nested cards
+            # Handle references to nested cards
             if field_value.startswith('[Nested card') or field_value.startswith('[Nested cards'):
-                card_data[field_name] = []
+                # Determine if this field expects a single Card or a list of Cards
+                origin = get_origin(field_type)
+                if origin is Union:
+                    # Handle Optional[Card] -> Card or None
+                    args = get_args(field_type)
+                    if len(args) == 2 and type(None) in args:
+                        # Get the non-None type
+                        actual_type = args[0] if args[1] is type(None) else args[1]
+                        # For Optional[Card], set to None (will be handled by validation)
+                        card_data[field_name] = None
+                    else:
+                        card_data[field_name] = None
+                elif origin is list:
+                    # Field expects a list of Cards
+                    card_data[field_name] = []
+                else:
+                    # Field expects a single Card instance
+                    # Set to None - this indicates the nested card reference should be resolved
+                    card_data[field_name] = None
                 continue
             
             # Try to cast the value to the expected type

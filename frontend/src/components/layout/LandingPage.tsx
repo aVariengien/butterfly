@@ -70,9 +70,9 @@ export function LandingPage({
 					<Slider
 						value={sessionDuration}
 						onChange={setSessionDuration}
-						min={0.1}
+						min={0.2}
 						max={20}
-						step={1}
+						step={0.1}
 						marks={[
 							{ value: 0.1, label: '0.1min' },
 							{ value: 10, label: '10min' },

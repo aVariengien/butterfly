@@ -13,14 +13,6 @@ export function deleteTextShapes(editor: Editor): number {
 	return textShapes.length
 }
 
-// Count validation cards on current page
-export function getValidationCardsCount(editor: Editor): number {
-	const shapes = editor.getCurrentPageShapes()
-	return shapes.filter(shape => 
-		shape.type === 'card' && 
-		(shape.props as any).toValidate === true
-	).length
-}
 
 // Get page by name
 export function getPageByName(editor: Editor, name: string) {

@@ -47,7 +47,7 @@ async def generate_card(request: BoardState) -> List[ReactCard]:
         output_type=card_type_classes, 
     )
     try:
-        result = agent.run_sync(prompt)
+        result = await agent.run(prompt)
     except UnexpectedModelBehavior:
         print("unexpected behavior!")
         raise
@@ -60,13 +60,30 @@ async def generate_card(request: BoardState) -> List[ReactCard]:
     print("generated_cards", generated_cards)
     
     # Apply fluid typechecking to the output
+    print(f"Available card types for validation: {list(card_types.keys())}")
     for card in generated_cards:
+        print(f"Validating card: {card.card_type}")
+        
+        # Skip validation for cards with nested fields
+        card_type_class = card_types.get(card.card_type)
+        if card_type_class and has_nested_card_fields(card_type_class):
+            print(f"Skipping fluid type checking for card with nested fields: {card.card_type}")
+            continue
+            
         validation_result = None
         try:
             # Use the validation service directly to avoid circular import
             from utils.conversion import cast_react_card_to_pydantic
             pydantic_card = cast_react_card_to_pydantic(card, card_types)
             validation_result = await perform_fluid_type_checking(pydantic_card, card_types)
+        except ValueError as e:
+            # Handle unknown card type errors gracefully
+            if "Unknown card type:" in str(e):
+                print(f"Skipping fluid type checking for unknown card type: {card.card_type}")
+                continue
+            else:
+                print(f"Error performing fluid type checking on generated pydantic card: {e}")
+                raise ValueError(f"Failed to run fluid typechecking: {str(e)}")
         except Exception as e:
             print(f"Error performing fluid type checking on generated pydantic card: {e}")
             raise ValueError(f"Failed to run fluid typechecking: {str(e)}")

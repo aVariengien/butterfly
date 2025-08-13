@@ -12,3 +12,8 @@ dependencies = [
     "logfire>=4.2.0",
     "runware>=0.4.18",
 ]
+
+[dependency-groups]
+dev = [
+    "pytest-asyncio>=1.1.0",
+]

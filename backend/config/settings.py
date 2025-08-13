@@ -3,7 +3,7 @@ Configuration settings for the Butterfly backend.
 """
 
 # Model configuration
-PYDANTIC_MODEL_NAME = "openai:gpt-5-mini-2025-08-07"
+PYDANTIC_MODEL_NAME = "openai:gpt-5-mini-2025-08-07" #"groq:llama-3.3-70b-versatile" #"openai:gpt-5-mini-2025-08-07"
 FAST_MODEL_NAME = "groq/llama-3.3-70b-versatile"
 
 # Available colors for card types (will cycle through these)
@@ -15,7 +15,7 @@ AVAILABLE_COLORS = [
 # Card dimensions
 DEFAULT_CARD_WIDTH = 250
 DEFAULT_CARD_HEIGHT = 200
-DEFAULT_CARD_PADDING = 5
+DEFAULT_CARD_PADDING = 25
 
 # Image generation settings
 IMAGE_WIDTH = 512

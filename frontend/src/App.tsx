@@ -11,7 +11,6 @@ import { SidePanel } from './components/SidePanel'
 import { SessionProvider } from './contexts/SessionContext'
 import { Header } from './components/layout/Header'
 import { LandingPage } from './components/layout/LandingPage'
-import { FrequencySlider } from './components/FrequencySlider'
 import { components } from './ui-overrides'
 import { useSessionManager } from './hooks/useSessionManager'
 import { useCardGeneration } from './hooks/useCardGeneration'
@@ -38,7 +37,6 @@ const theme = createTheme({
 export default function App() {
 	const [editor, setEditor] = useState<Editor | null>(null)
 	const [sidepanelCode, setSidepanelCode] = useState('')
-	const [generationFrequency, setGenerationFrequency] = useState(30) // Default to 30 seconds
 	// Session management
 	const {
 		showLandingPage,
@@ -82,7 +80,14 @@ export default function App() {
 	)
 
 	// Card generation
-	const { isGenerating } = useCardGeneration(editor, sessionEnded, sidepanelCode, intention, generationFrequency)
+	const { isGenerating, bufferedCards, createBufferedCards } = useCardGeneration(
+		editor, 
+		sessionEnded, 
+		sidepanelCode, 
+		intention, 
+		timeRemaining, 
+		sessionDuration
+	)
 
 	// TLDraw event handling
 	useTldrawEvents(editor, sessionEnded, handleCardSelect)
@@ -100,6 +105,14 @@ export default function App() {
 
 	// Auto-save whiteboard state every 5 minutes when it changes
 	useAutoSave(editor, intention, sessionDuration)
+
+	// Create buffered cards when session ends
+	React.useEffect(() => {
+		if (sessionEnded && bufferedCards.length > 0) {
+			console.log("Creating buffered cards ...")
+			createBufferedCards()
+		}
+	}, [sessionEnded, bufferedCards.length, createBufferedCards])
 
 	const handleSidepanelCodeChange = (code: string) => {
 		setSidepanelCode(code)
@@ -245,11 +258,6 @@ export default function App() {
 						</SessionProvider>
 					</div>
 					
-					{/* Frequency Slider */}
-					<FrequencySlider 
-						frequency={generationFrequency}
-						onChange={setGenerationFrequency}
-					/>
 					
 					{/* Session End Overlay */}
 					{sessionEnded && (
