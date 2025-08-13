@@ -21,16 +21,16 @@ Global user's thinking goal: {intention}
 ## Answer format
 You must respond with one of the following card types: [{', '.join(available_types)}] following the json format.
 
-
 Example output:
 
 {{
     "title": "...",
     "body": "..."
-    "image": {{
-        "prompt": "...",
-        "base64": "",
+    "child_card": {{
+        "title": "...",
+        ....
     }}
+    ....
 }}
 
 ## Json format

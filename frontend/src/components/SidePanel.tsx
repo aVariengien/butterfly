@@ -14,31 +14,72 @@ export const SidePanel: React.FC<SidePanelProps> = ({ onUpdateTypes, onCodeChang
   const [isCollapsed, setIsCollapsed] = useState(false)
   const [currentCode, setCurrentCode] = useState(`# Define your card types using Pydantic classes
 # Each class should inherit from Card
-# Available: Card, BaseModel, Field, Optional
+# Use "user_only: bool = True" or "generation_only: bool = True" to restrict the card usage
+
+class Idea(Card):
+    """Unconstrained idea"""
+    title: Optional[str] = Field(None, description="A short title defining the card")
+    body: Optional[str] = Field(None, description="The body of the idea, unconstrained.")
+    user_only: bool = True
+    
+class Context(Card):
+    """A raw copy paste of a ressource that is useful to add in context."""
+    title: Optional[str] = Field(None, description="The title of the ressource")
+    body: Optional[str] = Field(None, description="The raw copy paste of the ressource.")
+    user_only: bool = True
 
 class Example(Card):
     """A concrete example."""
-    title: str = Field(..., description="A short title defining the card")
-    body: str = Field(..., description="The body of the example, in 1-2 sentences.")
+    title: Optional[str] = Field(None, description="A short title defining the card")
+    body: Optional[str] = Field(None, description="The body of the example, in 1-2 sentences.")
     details: Optional[str] = Field("", description="Additional details when more space is needed.")
-    img_prompt: str = Field(..., description="Text prompt for generating an image for this example")
-    img_source: Optional[str] = Field(None, description="URL or base64 data of the example's image")
 
-class Idea(Card):
-    """A card representing a concrete idea."""
-    title: str = Field(..., description="A short title defining the card")
-    body: str = Field(..., description="The short description of the idea in 1-2 sentences.")
+
+class Image(Card):
+    """A visual illustration to concretize."""
+    title: None
+    body: None
+    img_prompt: str = Field(..., description="The prompt for AI image generation. The prompt should be creative, and not instruct the creation of any diagram or any image containing text elements.")
 
 class Question(Card):
     """A card representing a question."""
-    title: str = Field(..., description="A short title defining the card")
-    body: None  # No body for questions
+    title: Optional[str] = Field(None, description="The question.")
+    body: None
 
-class Task(Card):
-    """A task or todo item."""
-    title: str = Field(..., description="Task title")
-    body: str = Field(..., description="Task description")
-    details: Optional[str] = Field(None, description="Additional task details")`)
+class Claim(Card):
+    """A card representing a claim."""
+    title: Optional[str] = Field(None, description="A precise worded sentence making a claim. The claim should not be a tautology and should 'try to stick its head out'.'")
+    body: Optional[str] = Field(None, description="Space for short expansion on the claim, potentially relating to other cards.")
+
+class Property(Card):
+    """A card representing a property that can vary in degree. A property need to be able to have more of X or less of X, or an example need to be more of X or less of X. To check if it's a property, you need to find an example where the natural sentence 'Example E is/has more X than example B' makes sense."""
+    title: Optional[str] = Field(None, description="Short name for the property")
+    body: Optional[str] = Field(None, description="Short description.")
+    low_example: Optional[str] = Field(None, description="The title of a card in the whiteboard that has low amount of the property")
+    high_example: Optional[str] = Field(None, description="he title of a card in the whiteboard that has high amount of the property")
+
+
+class ContrastingExamplePair(Card):
+    """A pair of contrasting examples for a claim."""
+    claim_title: str = Field(..., description="The title of a claim card from the whiteboard the pair is reacting to.")
+    affirming_example: Example = Field(..., description="An example that is illustrating the claim")
+    counter_example: Example = Field(..., description="A counter example, disproving the claim")
+    generation_only: bool = True
+
+class FocusingCard(Card):
+    """A card for providing focus comments. Give a general comment when my activity is getting out of the theme OR getting out of the intention set for the session."""
+    title: str = Field(..., description="General comment about activity focus")
+    generation_only: bool = True
+    
+
+class ExampleSpace(Card):
+    """A 2D space of examples organized by two properties. Generate 4 examples that cover all the quadrant of low/high property1 and low/high property2."""
+    generation_only: bool = True
+    title_property1: str = Field(..., description="The title of an existing property card from the board that define the first axis of the space.")
+    user_only: bool = True
+    title_property2: str = Field(..., description="The title of an existing property card from the board that define the second axis of the space.")
+    examples: list[Example] = Field(..., description="List of 4 examples cards covering the property space. In the examples description include the high X, low Y at the start. ")
+`)
   const [codeInput, setCodeInput] = useState(currentCode)  // This is the "committed" code used for generation
   const [error, setError] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(false)

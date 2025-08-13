@@ -1,5 +1,6 @@
 import React from 'react'
-import { TextInput, Text, Button } from '@mantine/core'
+import { TextInput, Text, Button, ActionIcon } from '@mantine/core'
+import { IconDownload, IconUpload } from '@tabler/icons-react'
 import { HeaderProps } from '../../types/session'
 import { formatTime } from '../../utils/timeUtils'
 import { HEADER_HEIGHT } from '../../utils/constants'
@@ -11,6 +12,8 @@ export function Header({
 	currentPage,
 	onPageSwitch,
 	onEndSession,
+	onDownload,
+	onUpload,
 	style
 }: HeaderProps) {
 	return (
@@ -48,6 +51,40 @@ export function Header({
 			
 			{/* Page Navigation */}
 			<div style={{ marginLeft: 'auto', marginRight: '20px', display: 'flex', alignItems: 'center', gap: '10px' }}>
+				{onUpload && (
+					<ActionIcon
+						component="label"
+						variant="outline"
+						size="sm"
+						style={{
+							borderColor: 'white',
+							color: 'white',
+						}}
+						title="Load Board State"
+					>
+						<IconUpload size={16} />
+						<input
+							type="file"
+							accept=".json"
+							style={{ display: 'none' }}
+							onChange={onUpload}
+						/>
+					</ActionIcon>
+				)}
+				{onDownload && (
+					<ActionIcon
+						variant="outline"
+						size="sm"
+						onClick={onDownload}
+						style={{
+							borderColor: 'white',
+							color: 'white',
+						}}
+						title="Download Board State"
+					>
+						<IconDownload size={16} />
+					</ActionIcon>
+				)}
 				<Button
 					variant={currentPage === 'active' ? 'filled' : 'outline'}
 					size="sm"

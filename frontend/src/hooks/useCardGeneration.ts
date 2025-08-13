@@ -14,7 +14,8 @@ export function useCardGeneration(
 	editor: Editor | null, 
 	sessionEnded: boolean,
 	sidepanelCode: string,
-	intention: string
+	intention: string,
+	generationFrequency: number = CARD_GENERATION_INTERVAL
 ): UseCardGenerationReturn {
 	const [isGenerating, setIsGenerating] = useState(false)
 
@@ -84,18 +85,19 @@ export function useCardGeneration(
 
 	// Auto-generation timer
 	useEffect(() => {
-		if (!editor) return
+		if (!editor || generationFrequency >= 20000000) return // Don't generate if frequency is very high (never)
 
+		const intervalMs = generationFrequency * 1000 // Convert seconds to milliseconds
 		const interval = setInterval(() => {
 			const validationCardsCount = getValidationCardsCountWrapper()
 			if (validationCardsCount < MAX_VALIDATION_CARDS && !sessionEnded) {
 				console.log("session ended", sessionEnded);
 				triggerCardGeneration()
 			}
-		}, CARD_GENERATION_INTERVAL)
+		}, intervalMs)
 
 		return () => clearInterval(interval)
-	}, [editor, triggerCardGeneration, getValidationCardsCountWrapper, sessionEnded])
+	}, [editor, triggerCardGeneration, getValidationCardsCountWrapper, sessionEnded, generationFrequency])
 
 	return {
 		isGenerating,

@@ -59,6 +59,7 @@ class Card(BaseModel):
     img_prompt: Optional[str] = Field(None, description="The text prompt for generating an image for this card")
     img_source: Optional[str] = Field(None, description="The URL or base64 data of the card's image")
     #visible: bool = Field(False, description="Whether the card is visible on the whiteboard. Default to False when generating a new card, as the card is not placed yet.")
+    details: None
     w: float
     h: float
     x: float
@@ -417,7 +418,7 @@ def pydantic_to_react_content(pydantic_card: Card) -> list[ReactCard]:
     return cards
 
 
-def get_card_types_from_code(code: str) -> tuple[bool, str, Dict[str, Type[Card]]]:
+def get_card_types_from_code(code: str, generation: bool = False, user_card: bool = False) -> tuple[bool, str, Dict[str, Type[Card]]]:
     """
     Execute Python code in a safe environment and extract Card subclasses.
     Returns (success, error_message, card_type_classes)
@@ -465,7 +466,15 @@ def get_card_types_from_code(code: str) -> tuple[bool, str, Dict[str, Type[Card]
             if (inspect.isclass(obj) and 
                 issubclass(obj, Card) and 
                 obj is not Card):
+                
+                # Check if the class has user_only field set to True
+                if generation and 'user_only' in (list(obj.model_fields.keys()) if hasattr(obj, 'model_fields') else []):
+                    continue
+
+                if user_card and 'generation_only' in (list(obj.model_fields.keys()) if hasattr(obj, 'model_fields') else []):
+                    continue
                 pydantic_classes[name] = obj
+
         
         if not pydantic_classes:
             return False, "No card type classes found. Define classes that inherit from Card.", {}
@@ -481,7 +490,7 @@ def execute_python_code_for_config(code: str) -> tuple[bool, str, Dict[str, Any]
     Execute Python code and return React configuration for the execute-code endpoint.
     Returns (success, error_message, react_config)
     """
-    success, error_msg, pydantic_classes = get_card_types_from_code(code)
+    success, error_msg, pydantic_classes = get_card_types_from_code(code, user_card=True)
     
     if not success:
         return success, error_msg, {}
@@ -882,7 +891,7 @@ async def generate_card(request: BoardState):
     try:
         
         # Execute the sidepanel code to get fresh card types
-        success, error_msg, card_types = get_card_types_from_code(request.sidepanel_code)
+        success, error_msg, card_types = get_card_types_from_code(request.sidepanel_code, generation=True)
         
         if not success:
             raise HTTPException(status_code=400, detail=f"Failed to execute sidepanel code: {error_msg}")

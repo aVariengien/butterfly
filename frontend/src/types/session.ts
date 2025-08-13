@@ -41,5 +41,7 @@ export interface HeaderProps {
 	currentPage: 'active' | 'history'
 	onPageSwitch: (page: 'active' | 'history') => void
 	onEndSession?: () => void
+	onDownload?: () => void // Download board state function
+	onUpload?: (event: React.ChangeEvent<HTMLInputElement>) => void // Upload board state function
 	style?: React.CSSProperties
 }
