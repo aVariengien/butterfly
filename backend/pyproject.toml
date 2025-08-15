@@ -11,6 +11,7 @@ dependencies = [
     "nest-asyncio>=1.6.0",
     "logfire>=4.2.0",
     "runware>=0.4.18",
+    "anthropic>=0.31.0",
 ]
 
 [dependency-groups]

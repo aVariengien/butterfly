@@ -27,7 +27,7 @@ from models.responses import (
 )
 
 # Import API handlers
-from api.cards import generate_title, generate_card_endpoint, fluid_type_checking
+from api.cards import generate_title, generate_card_endpoint, generate_card_with_base_model_endpoint, fluid_type_checking
 from api.code import execute_code
 from api.images import generate_image_endpoint
 
@@ -84,6 +84,12 @@ async def fluid_type_checking_endpoint(request: FluidTypeCheckingRequest):
 async def generate_card_route(request: BoardState):
     """Generate a new card based on the board state and intention."""
     return await generate_card_endpoint(request)
+
+
+@app.post("/generate-card-base-model", response_model=List[ReactCard])
+async def generate_card_base_model_route(request: BoardState):
+    """Generate cards using the enhanced base model strategy with Claude completions."""
+    return await generate_card_with_base_model_endpoint(request)
 
 
 @app.post("/generate-image")

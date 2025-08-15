@@ -57,7 +57,7 @@ export async function generateCard(editor: Editor, sidepanelCode: string, intent
 		
 		console.log('Sending request to backend:', requestBody)
 
-		const response = await fetch('http://localhost:8000/generate-card', {
+		const response = await fetch('http://localhost:8000/generate-card-base-model', {
 			method: 'POST',
 			headers: {
 				'Content-Type': 'application/json',

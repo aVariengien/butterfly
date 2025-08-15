@@ -6,7 +6,7 @@ from fastapi import HTTPException
 from models.cards import ReactCard
 from models.requests import BoardState, FluidTypeCheckingRequest, CardDescriptionRequest
 from models.responses import TitleResponse, FluidTypeCheckingResponse, FieldValidationResult
-from services.card_service import generate_card
+from services.card_service import generate_card, generate_card_with_base_model
 from services.code_service import get_card_types_from_code
 from services.validation_service import perform_fluid_type_checking
 from utils.conversion import cast_react_card_to_pydantic
@@ -142,3 +142,15 @@ async def fluid_type_checking(request: FluidTypeCheckingRequest) -> FluidTypeChe
     except Exception as e:
         print(f"Error in fluid_type_checking: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to perform fluid type checking: {str(e)}")
+
+
+async def generate_card_with_base_model_endpoint(request: BoardState) -> List[ReactCard]:
+    """
+    Generate cards using the base model strategy with Claude completions.
+    This endpoint uses the enhanced two-step approach: first generate raw notes, then cards.
+    """
+    try:
+        return await generate_card_with_base_model(request)
+    except Exception as e:
+        print(f"Error in generate_card_with_base_model: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to generate cards with base model: {str(e)}")
