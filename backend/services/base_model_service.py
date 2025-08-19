@@ -180,9 +180,21 @@ async def generate_cards_with_base_model_strategy(
         for name, pydantic_type in card_types.items()
     ]
     
+    # Cast ReactCards to pydantic cards before giving to prompt
+    from utils.conversion import cast_react_card_to_pydantic
+    pydantic_cards = []
+    for react_card in board_state.cards:
+        try:
+            pydantic_card = cast_react_card_to_pydantic(react_card, card_types)
+            pydantic_cards.append(pydantic_card)
+        except ValueError as e:
+            print(f"Warning: Could not cast card {react_card.card_type} to pydantic: {e}")
+            # Skip cards that can't be cast
+            continue
+    
     base_prompt = create_base_model_to_card_list_prompt(
         intention=board_state.intention,
-        board_json=str(board_state.cards),
+        board_json=str(pydantic_cards),
         available_types=available_types,
         pydantic_classes_description=str(card_descriptions),
         raw_notes=responses_concat

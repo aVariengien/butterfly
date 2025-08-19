@@ -51,7 +51,7 @@ async def execute_code(request: CodeExecutionRequest) -> CodeExecutionResponse:
                     error=f"Layout for '{card_type}' must be a dictionary"
                 )
             
-            required_fields = {'image', 'title', 'body', 'details'}
+            required_fields = {'image', 'title', 'body'}
             if not required_fields.issubset(set(layout.keys())):
                 return CodeExecutionResponse(
                     success=False,
@@ -59,11 +59,20 @@ async def execute_code(request: CodeExecutionRequest) -> CodeExecutionResponse:
                 )
             
             for field, value in layout.items():
-                if not isinstance(value, bool):
-                    return CodeExecutionResponse(
-                        success=False,
-                        error=f"Layout field '{field}' for '{card_type}' must be a boolean"
-                    )
+                if field == 'extra_fields':
+                    # extra_fields should be a list of strings
+                    if not isinstance(value, list) or not all(isinstance(item, str) for item in value):
+                        return CodeExecutionResponse(
+                            success=False,
+                            error=f"Layout field 'extra_fields' for '{card_type}' must be a list of strings"
+                        )
+                else:
+                    # All other layout fields should be booleans
+                    if not isinstance(value, bool):
+                        return CodeExecutionResponse(
+                            success=False,
+                            error=f"Layout field '{field}' for '{card_type}' must be a boolean"
+                        )
         
         # If we get here, the code executed successfully and produced valid configurations
         return CodeExecutionResponse(

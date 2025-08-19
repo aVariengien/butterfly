@@ -14,7 +14,7 @@ export type ICardShape = TLBaseShape<
 		body: string,
 		img_prompt?: string, // text prompt for image generation
 		img_source?: string, // URL or base64 image data
-		details?: string, // expandable details text
+		extra_fields?: Record<string, string>, // dictionary of extra field values
 		card_type: string,
 		toValidate?: boolean, // flag to show accept/reject buttons
 		createdAt?: number, // seconds since session start

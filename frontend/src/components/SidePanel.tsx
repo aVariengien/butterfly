@@ -63,27 +63,10 @@ class Metaphor(Card):
     title: Optional[str] = Field(None, description="Short name for the metaphor")
     body: Optional[str] = Field(None, description="The body of the metaphor. It should be a clearly worded")
 
-
-class ContrastingExamplePair(Card):
-    """A pair of contrasting examples for a claim."""
-    claim_title: str = Field(..., description="The title of a claim card from the whiteboard the pair is reacting to.")
-    affirming_example: Example = Field(..., description="An example that is illustrating the claim")
-    counter_example: Example = Field(..., description="A counter example, disproving the claim")
-    generation_only: bool = True
-
 class FocusingCard(Card):
     """A card for providing focus comments. Give a general comment when my activity is getting out of the theme OR getting out of the intention set for the session."""
     title: str = Field(..., description="General comment about activity focus")
     generation_only: bool = True
-    
-
-class ExampleSpace(Card):
-    """A 2D space of examples organized by two properties. Generate 4 examples that cover all the quadrant of low/high property1 and low/high property2."""
-    generation_only: bool = True
-    title_property1: str = Field(..., description="The title of an existing property card from the board that define the first axis of the space.")
-    user_only: bool = True
-    title_property2: str = Field(..., description="The title of an existing property card from the board that define the second axis of the space.")
-    examples: list[Example] = Field(..., description="List of 4 examples cards covering the property space. In the examples description include the high X, low Y at the start. ")
 `)
   const [codeInput, setCodeInput] = useState(currentCode)  // This is the "committed" code used for generation
   const [error, setError] = useState<string | null>(null)

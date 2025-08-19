@@ -42,11 +42,10 @@ def pydantic_to_react_layout(pydantic_classes: Dict[str, Type[Card]]) -> Dict[st
                 'image': False,
                 'title': False,
                 'body': False,
-                'details': False,
             }
             
             # Check each field to determine visibility
-            for field_name in ['title', 'body', 'details']:
+            for field_name in ['title', 'body']:
                 if field_name in model_fields:
                     field_info = model_fields[field_name]
                     
@@ -66,45 +65,16 @@ def pydantic_to_react_layout(pydantic_classes: Dict[str, Type[Card]]) -> Dict[st
             has_img_source = 'img_source' in model_fields
             layout['image'] = has_img_prompt or has_img_source
             
-            # If there is a field in model_fields that is not in the default Card fields, set details=True
-            default_card_fields = set(list(Card.model_fields.keys()) + ["user_only", "generation_only"]) 
-            extra_fields = set(model_fields.keys()) - default_card_fields
-            if extra_fields:
-                layout['details'] = True
+            # Identify extra fields that should be shown as inputs
+            default_card_fields = set(list(Card.model_fields.keys()) + ["user_only", "generation_only"])
+            extra_field_names = [field_name for field_name in model_fields.keys() 
+                               if field_name not in default_card_fields]
+            layout['extra_fields'] = extra_field_names
 
             layouts[class_name] = layout
             
         except Exception as e:
             print(f"Error processing {class_name}: {e}")
-            # Fallback to analyzing the class definition
-            layout = {
-                'image': True,  # Default to showing most fields
-                'title': True,
-                'body': True,
-                'details': True,
-            }
-            
-            # Try to be smarter about the fallback by checking annotations
-            if hasattr(pydantic_class, '__annotations__'):
-                annotations = pydantic_class.__annotations__
-                for field_name in ['title', 'body', 'details']:
-                    if field_name in annotations:
-                        # Check if the annotation suggests None
-                        annotation_str = str(annotations[field_name])
-                        if 'None' in annotation_str and annotation_str != 'Optional[None]':
-                            layout[field_name] = True
-                        elif annotation_str == 'None':
-                            layout[field_name] = False
-                    else:
-                        layout[field_name] = False
-                
-                # Check for image fields
-                has_img_prompt = 'img_prompt' in annotations
-                has_img_source = 'img_source' in annotations
-                layout['image'] = has_img_prompt or has_img_source
-            
-            layouts[class_name] = layout
-    
     return {
         'colors': colors,
         'layouts': layouts
@@ -138,13 +108,8 @@ def pydantic_to_react_content(pydantic_card: Card) -> List[ReactCard]:
         # Find additional fields beyond the base Card class
         additional_fields = current_card_fields - base_card_fields
         
-        # Start with existing details or empty string
-        details_parts = []
-        existing_details = getattr(card, 'details', '') or ''
-        if existing_details:
-            details_parts.append(existing_details)
-        
-        # Process additional fields
+        # Build extra_fields dictionary for all additional fields
+        extra_fields = {}
         for field_name in additional_fields:
             field_value = getattr(card, field_name, None)
             
@@ -157,8 +122,8 @@ def pydantic_to_react_content(pydantic_card: Card) -> List[ReactCard]:
                 # Recursively process nested card
                 nested_card = process_card(field_value, is_root=False)
                 cards.append(nested_card)
-                # Add reference in details
-                details_parts.append(f"{field_name}: [Nested card: {field_value.__class__.__name__}]")
+                # Add reference in extra_fields
+                extra_fields[field_name] = f"[Nested card: {field_value.__class__.__name__}]"
             elif isinstance(field_value, list):
                 # Handle list of potential Card instances
                 nested_cards_found = []
@@ -169,16 +134,13 @@ def pydantic_to_react_content(pydantic_card: Card) -> List[ReactCard]:
                         nested_cards_found.append(item.__class__.__name__)
                 
                 if nested_cards_found:
-                    details_parts.append(f"{field_name}: [Nested cards: {', '.join(nested_cards_found)}]")
+                    extra_fields[field_name] = f"[Nested cards: {', '.join(nested_cards_found)}]"
                 else:
                     # Regular list field
-                    details_parts.append(f"{field_name}: {field_value}")
+                    extra_fields[field_name] = str(field_value)
             else:
-                # Regular additional field
-                details_parts.append(f"{field_name}: {field_value}")
-        
-        # Combine all details
-        final_details = '\n'.join(details_parts) if details_parts else ''
+                # Regular additional field - convert to string
+                extra_fields[field_name] = str(field_value)
         
         return ReactCard(
             w=getattr(card, 'w', 300.0),
@@ -190,7 +152,7 @@ def pydantic_to_react_content(pydantic_card: Card) -> List[ReactCard]:
             card_type=card_type,
             img_prompt=img_prompt,
             img_source=img_source,
-            details=final_details,
+            extra_fields=extra_fields if extra_fields else None,
             createdAt=None  # Will be set by the frontend
         )
     
@@ -242,8 +204,8 @@ def cast_react_card_to_pydantic(react_card: ReactCard, card_types: Dict[str, Typ
     # Get model fields to understand expected types
     model_fields = card_type_class.model_fields
     
-    # Handle each field based on its expected type in the target model
-    for field_name in ['title', 'body', 'details', 'img_prompt', 'img_source']:
+    # Handle basic fields based on their expected type in the target model
+    for field_name in ['title', 'body', 'img_prompt', 'img_source']:
         react_value = getattr(react_card, field_name, '')
         
         if field_name in model_fields:
@@ -259,27 +221,17 @@ def cast_react_card_to_pydantic(react_card: ReactCard, card_types: Dict[str, Typ
             elif field_info.default is ...:  # Required field
                 card_data[field_name] = react_value
     
-    # Parse details field for additional fields in field_name: value format
-    processed_details = react_card.details
-    if react_card.details:
-        details_pattern = r'(\w+):\s*(.+?)(?=\n\w+:|$)'
-        matches = re.findall(details_pattern, react_card.details, re.DOTALL)
-        patterns_to_remove = []
-        
-        for field_name, field_value in matches:
-            field_value = field_value.strip()
-            
+    # Process extra_fields dictionary for additional fields
+    if react_card.extra_fields:
+        for field_name, field_value in react_card.extra_fields.items():
             # Skip if field is not in the model
             if field_name not in model_fields:
                 continue
                 
             field_info = model_fields[field_name]
             field_type = field_info.annotation
-
-            patterns_to_remove.append(f"{field_name}: {field_value}")
-            patterns_to_remove.append(f"{field_name}:{field_value}")
             
-            # Skip if field is a Card object or list of Cards (as requested)
+            # Skip if field is a Card object or list of Cards (nested cards not supported yet)
             if (hasattr(field_type, '__origin__') and field_type.__origin__ is not Union and 
                 hasattr(field_type, '__args__') and field_type.__args__ and 
                 any(isinstance(arg, type) and issubclass(arg, Card) for arg in field_type.__args__ if isinstance(arg, type))):
@@ -299,8 +251,6 @@ def cast_react_card_to_pydantic(react_card: ReactCard, card_types: Dict[str, Typ
                     # Handle Optional[Card] -> Card or None
                     args = get_args(field_type)
                     if len(args) == 2 and type(None) in args:
-                        # Get the non-None type
-                        actual_type = args[0] if args[1] is type(None) else args[1]
                         # For Optional[Card], set to None (will be handled by validation)
                         card_data[field_name] = None
                     else:
@@ -354,24 +304,6 @@ def cast_react_card_to_pydantic(react_card: ReactCard, card_types: Dict[str, Typ
             except (ValueError, TypeError) as e:
                 # If casting fails, skip this field
                 raise ValueError(f"Failed to cast field {field_name} to {field_type}: {e}")
-        
-        # Remove processed patterns from details
-        for pattern in patterns_to_remove:
-            processed_details = processed_details.replace(pattern, "").strip()
-        
-        # Clean up extra newlines and whitespace
-        processed_details = re.sub(r'\n\s*\n+', '\n', processed_details).strip()
-        
-        # Update the details field with remaining content
-        if 'details' in model_fields and processed_details:
-            card_data['details'] = processed_details
-        elif 'details' in model_fields:
-            # Set to empty string or None based on field requirements
-            field_info = model_fields['details']
-            if field_info.default is ...:  # Required field
-                card_data['details'] = ""
-            else:
-                card_data['details'] = None
     
     # Create instance of the correct card type
     return card_type_class(**card_data)

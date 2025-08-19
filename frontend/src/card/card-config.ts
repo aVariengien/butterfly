@@ -12,24 +12,24 @@ export const CardTypeToLayout: Record<CardType, {
 	image: boolean
 	title: boolean
 	body: boolean
-	details: boolean
+	extra_fields: string[]
 }> = {
 	Example: {
 		image: true,
 		title: true,
 		body: true,
-		details: true,
+		extra_fields: [],
 	},
 	Question: {
 		image: false,
 		title: true,
 		body: false,
-		details: false,
+		extra_fields: [],
 	},
 	Idea: {
 		image: false,
 		title: true,
 		body: true,
-		details: false,
+		extra_fields: [],
 	},
 }

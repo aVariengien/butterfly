@@ -104,7 +104,7 @@ export class CardShapeUtil extends ShapeUtil<ICardShape> {
 			title: '',
 			img_prompt: '',
 			img_source: '',
-			details: 'This is additional detail information that can be expanded.',
+			extra_fields: {},
 			card_type: selectedCardType,
 			createdAt: creationTime,
 			fluidErrors: [],
@@ -126,7 +126,7 @@ export class CardShapeUtil extends ShapeUtil<ICardShape> {
 		// eslint-disable-next-line react-hooks/rules-of-hooks
 		const sessionContext = useSessionContext()
 		// eslint-disable-next-line react-hooks/rules-of-hooks
-		const [isDetailsEditing, setIsDetailsEditing] = useState(true)
+		const [editingField, setEditingField] = useState<string | null>(null)
 		
 		const layout = getCardTypeLayout(shape.props.card_type)
 		const borderColor = getCardTypeColor(shape.props.card_type)
@@ -185,34 +185,30 @@ export class CardShapeUtil extends ShapeUtil<ICardShape> {
 			})
 		}
 
-		const handleDetailsChange = (event: React.ChangeEvent<HTMLTextAreaElement>) => {
-			if (isSessionEndMode || isHistoryView) return // Disable editing during session end
-			event.stopPropagation()
-			event.preventDefault()
+		const handleExtraFieldChange = (fieldName: string, value: string) => {
+			if (isSessionEndMode || isHistoryView) return
+			const updatedExtraFields = { ...shape.props.extra_fields, [fieldName]: value }
 			this.editor.updateShape<ICardShape>({
 				id: shape.id,
 				type: shape.type,
 				props: {
 					...shape.props,
-					details: event.target.value,
+					extra_fields: updatedExtraFields || {},
 				},
 			})
 		}
 
-		const handleDetailsBlur = async () => {
+		const handleExtraFieldBlur = async (fieldName: string) => {
 			if (isSessionEndMode || isHistoryView) return
-			setIsDetailsEditing(false)
+			setEditingField(null)
 			
-			// Check for img_prompt in details and generate image if changed
-			const details = shape.props.details || ''
-			const imgPromptMatch = details.match(/img_prompt:\s*(.+?)(?=\n|$)/)
-			
-			if (imgPromptMatch) {
-				const detailsPrompt = imgPromptMatch[1].trim()
+			// Check for img_prompt field and generate image if changed
+			if (fieldName === 'img_prompt') {
+				const imgPrompt = shape.props.extra_fields?.[fieldName] || ''
 				const currentPrompt = shape.props.img_prompt || ''
 				
 				// If prompt is empty, delete the image
-				if (!detailsPrompt && (currentPrompt || shape.props.img_source)) {
+				if (!imgPrompt && (currentPrompt || shape.props.img_source)) {
 					console.log('Deleting image (empty prompt)')
 					this.editor.updateShape<ICardShape>({
 						id: shape.id,
@@ -225,11 +221,11 @@ export class CardShapeUtil extends ShapeUtil<ICardShape> {
 					})
 				}
 				// Only generate if prompt changed and is not empty
-				else if (detailsPrompt && detailsPrompt !== currentPrompt) {
-					console.log('Generating image for prompt:', detailsPrompt)
+				else if (imgPrompt && imgPrompt !== currentPrompt) {
+					console.log('Generating image for prompt:', imgPrompt)
 					
 					try {
-						const imageUrl = await generateImageForCard(detailsPrompt)
+						const imageUrl = await generateImageForCard(imgPrompt)
 						if (imageUrl) {
 							// Update card with new img_prompt and img_source
 							this.editor.updateShape<ICardShape>({
@@ -237,7 +233,7 @@ export class CardShapeUtil extends ShapeUtil<ICardShape> {
 								type: shape.type,
 								props: {
 									...shape.props,
-									img_prompt: detailsPrompt,
+									img_prompt: imgPrompt,
 									img_source: imageUrl,
 								},
 							})
@@ -247,28 +243,6 @@ export class CardShapeUtil extends ShapeUtil<ICardShape> {
 						console.error('Failed to generate image:', error)
 					}
 				}
-				if (!detailsPrompt) {
-					this.editor.updateShape<ICardShape>({
-						id: shape.id,
-						type: shape.type,
-						props: {
-							...shape.props,
-							img_prompt: "",
-							img_source: "",
-						},
-					})
-				}
-			}
-			else {
-				this.editor.updateShape<ICardShape>({
-					id: shape.id,
-					type: shape.type,
-					props: {
-						...shape.props,
-						img_prompt: "",
-						img_source: "",
-					},
-				})
 			}
 		}
 
@@ -277,7 +251,7 @@ export class CardShapeUtil extends ShapeUtil<ICardShape> {
 			const content = {
 				title: cardProps.title || '',
 				body: cardProps.body || '', 
-				details: cardProps.details || '',
+				extra_fields: cardProps.extra_fields || {},
 				card_type: cardProps.card_type || '',
 				img_prompt: cardProps.img_prompt || '',
 				img_source: cardProps.img_source || '',
@@ -506,28 +480,35 @@ export class CardShapeUtil extends ShapeUtil<ICardShape> {
 							/>
 						)}
 
-						{/* Details section */}
-						{layout.details && (
-							<Textarea
-								size="sm"
-								mt={0}
-								variant="unstyled"
-								placeholder="field: value..."
-								value={shape.props.details}
-								onBlur={handleDetailsBlur}
-								onChange={handleDetailsChange}
-								minRows={1}
-								autosize
-								readOnly={(isSessionEndMode || isHistoryView)}
-								styles={{
-									input: {
-										padding: 0,
-										cursor: (isSessionEndMode || isHistoryView) ? 'pointer' : 'text',
-										fontSize: '0.8rem',
-									}
-								}}
-							/>
-						)}
+						{/* Extra fields section */}
+						{layout.extra_fields && layout.extra_fields.map((fieldName) => (
+							<div key={fieldName} style={{ marginTop: '8px' }}>
+								<div style={{ fontSize: '0.7rem', fontWeight: 600, marginBottom: '2px', color: 'var(--mantine-color-gray-6)' }}>
+									{fieldName}:
+								</div>
+								<Textarea
+									size="sm"
+									mt={0}
+									variant="unstyled"
+									placeholder={`Enter ${fieldName}...`}
+									value={shape.props.extra_fields?.[fieldName] || ''}
+									onChange={(event) => handleExtraFieldChange(fieldName, event.target.value)}
+									onBlur={() => handleExtraFieldBlur(fieldName)}
+									minRows={1}
+									autosize
+									readOnly={(isSessionEndMode || isHistoryView)}
+									styles={{
+										input: {
+											padding: 0,
+											cursor: (isSessionEndMode || isHistoryView) ? 'pointer' : 'text',
+											fontSize: '0.75rem',
+											lineHeight: '1.3',
+											resize: 'none',
+										}
+									}}
+								/>
+							</div>
+						))}
 
 						{/* Fluid type checking errors */}
 						{fluidErrors.length > 0 && (

@@ -182,7 +182,7 @@ export function useCardGeneration(
 							body: bufferedCard.body,
 							img_prompt: bufferedCard.img_prompt || '',
 							img_source: bufferedCard.img_source || '',
-							details: bufferedCard.details || '',
+							extra_fields: bufferedCard.extra_fields || {},
 							card_type: bufferedCard.card_type,
 							toValidate: true,
 							createdAt: bufferedCard.createdAt || creationTime,

@@ -43,12 +43,12 @@ export function getCardTypeColor(cardType: string): string {
 }
 
 // Get layout for a card type
-export function getCardTypeLayout(cardType: string): Record<string, boolean> {
+export function getCardTypeLayout(cardType: string): Record<string, boolean | string[]> {
   const current = getCurrentCardTypes()
   return current.layouts[cardType] || {
     image: true,
     title: true,
     body: true,
-    details: true
+    extra_fields: []
   }
 }

@@ -137,7 +137,7 @@ export default function App() {
 					card_type: props.card_type || '',
 					img_prompt: props.img_prompt || '',
 					img_source: props.img_source || '',
-					details: props.details || '',
+					extra_fields: props.extra_fields || {},
 					createdAt: props.createdAt || Math.floor(Date.now() / 1000)
 				}
 			})
@@ -192,7 +192,7 @@ export default function App() {
 							card_type: card.card_type || '',
 							img_prompt: card.img_prompt || '',
 							img_source: card.img_source || '',
-							details: card.details || '',
+							extra_fields: card.extra_fields || {},
 							createdAt: card.createdAt || Math.floor(Date.now() / 1000),
 							toValidate: false // Loaded cards don't need validation
 						}

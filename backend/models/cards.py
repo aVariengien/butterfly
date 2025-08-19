@@ -10,7 +10,6 @@ class Card(BaseModel):
     title: Optional[str] = Field(None, description="A short title defining the card")
     body: Optional[str] = Field(None, description="The body of the card.")
     img_source: Optional[str] = Field(None, description="The URL or base64 data of the card's image")
-    details: None
     w: float
     h: float
     x: float
@@ -28,5 +27,5 @@ class ReactCard(BaseModel):
     card_type: str
     img_prompt: Optional[str] = None
     img_source: Optional[str] = None
-    details: Optional[str]
+    extra_fields: Optional[dict[str, str]] = None
     createdAt: Optional[float] = None  # seconds since session start

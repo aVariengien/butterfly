@@ -14,7 +14,7 @@ interface FluidTypeCheckingRequest {
 		card_type: string
 		img_prompt?: string
 		img_source?: string
-		details?: string
+		extra_fields?: Record<string, string>
 		createdAt?: number
 	}
 	sidepanel_code: string
@@ -44,7 +44,7 @@ export async function generateCard(editor: Editor, sidepanelCode: string, intent
 					card_type: props.card_type || '',
 					img_prompt: props.img_prompt || '',
 					img_source: props.img_source || '',
-					details: props.details || '',
+					extra_fields: props.extra_fields || {},
 					createdAt: props.createdAt || Math.floor((Date.now() - SESSION_START_TIME) / 1000)
 				}
 			})
@@ -88,7 +88,7 @@ function createCardHash(card: any): string {
 	const content = {
 		title: card.title || '',
 		body: card.body || '', 
-		details: card.details || '',
+		extra_fields: card.extra_fields || {},
 		card_type: card.card_type || '',
 		img_prompt: card.img_prompt || '',
 		img_source: card.img_source || ''
@@ -121,7 +121,7 @@ export async function performFluidTypeChecking(
 			card_type: cardProps.card_type || '',
 			img_prompt: cardProps.img_prompt || '',
 			img_source: cardProps.img_source || '',
-			details: cardProps.details || '',
+			extra_fields: cardProps.extra_fields || {},
 			createdAt: cardProps.createdAt || Math.floor((Date.now() - SESSION_START_TIME) / 1000)
 		}
 

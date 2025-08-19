@@ -22,4 +22,4 @@ IMAGE_WIDTH = 512
 IMAGE_HEIGHT = 256
 
 # CORS settings
-ALLOWED_ORIGINS = ["http://localhost:3000", "http://localhost:5173"]
+ALLOWED_ORIGINS = ["http://localhost:3000", "http://localhost:5173", "http://localhost:5174"]

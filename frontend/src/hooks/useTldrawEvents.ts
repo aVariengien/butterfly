@@ -57,7 +57,7 @@ export function useTldrawEvents(
 							body: '',
 							img_prompt: '',
 							img_source: '',
-							details: '',
+							extra_fields: {},
 							card_type: selectedCardType,
 							createdAt: creationTime,
 						},

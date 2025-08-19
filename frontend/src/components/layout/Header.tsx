@@ -136,6 +136,8 @@ export function Header({
 							color: timeRemaining <= 60 ? '#ff6b6b' : 'white', // Red when less than 1 minute
 							fontWeight: 600,
 							textShadow: '1px 1px 2px rgba(0,0,0,0.5)',
+							minWidth: '5ch', // Fixed width to prevent layout shift
+							textAlign: 'center',
 						}}
 					>
 						{formatTime(timeRemaining)}

@@ -223,6 +223,7 @@ name = "butterfly-backend"
 version = "0.1.0"
 source = { virtual = "." }
 dependencies = [
+    { name = "anthropic" },
     { name = "fastapi" },
     { name = "litellm" },
     { name = "logfire" },
@@ -241,6 +242,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
+    { name = "anthropic", specifier = ">=0.31.0" },
     { name = "fastapi" },
     { name = "litellm" },
     { name = "logfire", specifier = ">=4.2.0" },

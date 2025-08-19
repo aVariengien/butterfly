@@ -35,7 +35,7 @@ export const useAutoSave = (
           card_type: props.card_type || '',
           img_prompt: props.img_prompt || '',
           img_source: props.img_source || '',
-          details: props.details || '',
+          extra_fields: props.extra_fields || {},
           createdAt: props.createdAt || Math.floor(Date.now() / 1000)
         }
       })

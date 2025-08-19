@@ -63,6 +63,12 @@ def get_card_types_from_code(code: str, generation: bool = False, user_card: boo
 
                 if user_card and 'generation_only' in (list(obj.model_fields.keys()) if hasattr(obj, 'model_fields') else []):
                     continue
+                    
+                # Check for nested card fields - return error if found
+                from utils.type_checking import has_nested_card_fields
+                if has_nested_card_fields(obj):
+                    return False, f"Error: Card type '{name}' contains nested card fields. Nested card types are not supported.", {}
+                    
                 pydantic_classes[name] = obj
 
         

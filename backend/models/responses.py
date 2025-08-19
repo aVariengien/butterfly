@@ -1,7 +1,7 @@
 """
 Response models for API endpoints.
 """
-from typing import Optional, Dict, List
+from typing import Optional, Dict, List, Union
 from pydantic import BaseModel, Field
 
 
@@ -11,7 +11,7 @@ class TitleResponse(BaseModel):
 
 class CardTypeConfig(BaseModel):
     colors: Dict[str, str]
-    layouts: Dict[str, Dict[str, bool]]
+    layouts: Dict[str, Dict[str, Union[bool, List[str]]]]
 
 
 class CodeExecutionResponse(BaseModel):

@@ -9,7 +9,7 @@ export interface GeneratedCard {
 	body: string
 	img_prompt?: string
 	img_source?: string
-	details?: string
+	extra_fields?: Record<string, string>
 	card_type: string
 	createdAt?: number
 }
