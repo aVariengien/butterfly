@@ -22,8 +22,8 @@ class ReactCard(BaseModel):
     h: float
     x: float
     y: float
-    title: str
-    body: str
+    title: Optional[str]
+    body: Optional[str]
     card_type: str
     img_prompt: Optional[str] = None
     img_source: Optional[str] = None

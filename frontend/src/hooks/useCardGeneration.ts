@@ -22,13 +22,20 @@ export function useCardGeneration(
 ): UseCardGenerationReturn {
 	const [isGenerating, setIsGenerating] = useState(false)
 	const [bufferedCards, setBufferedCards] = useState<GeneratedCard[]>([])
-	const [generationTriggered, setGenerationTriggered] = useState({ at30: false, at50: false, at70: false })
+	// Track which percentage thresholds have triggered generation (every 10%)
+	const [generationTriggered, setGenerationTriggered] = useState({ 
+		at10: false, at20: false, at30: false, at40: false, at50: false, 
+		at60: false, at70: false, at80: false, at90: false, at100: false 
+	})
 
 	// Reset generation flags when a new session starts
 	useEffect(() => {
 		if (timeRemaining === sessionDuration * 60) {
 			// This indicates a fresh session start
-			setGenerationTriggered({ at30: false, at50: false, at70: false })
+			setGenerationTriggered({ 
+				at10: false, at20: false, at30: false, at40: false, at50: false, 
+				at60: false, at70: false, at80: false, at90: false, at100: false 
+			})
 			setBufferedCards([]) // Also clear any leftover buffered cards
 		}
 	}, [timeRemaining, sessionDuration])
@@ -215,7 +222,7 @@ export function useCardGeneration(
 		}
 	}, [editor, bufferedCards, findValidPosition])
 
-	// Timer-based card generation (30%, 50%, 70%)
+	// Timer-based card generation (every 10%: 10%, 20%, 30%, ..., 100%)
 	useEffect(() => {
 		if (!timeRemaining || sessionEnded || !sessionDuration) return
 
@@ -223,16 +230,26 @@ export function useCardGeneration(
 		const elapsedTime = sessionDurationSeconds - timeRemaining
 		const progressPercent = (elapsedTime / sessionDurationSeconds) * 100
 
-		// Trigger generation at specific percentages
-		if (progressPercent >= 30 && !generationTriggered.at30) {
-			setGenerationTriggered(prev => ({ ...prev, at30: true }))
-			triggerCardGeneration()
-		} else if (progressPercent >= 50 && !generationTriggered.at50) {
-			setGenerationTriggered(prev => ({ ...prev, at50: true }))
-			triggerCardGeneration()
-		} else if (progressPercent >= 70 && !generationTriggered.at70) {
-			setGenerationTriggered(prev => ({ ...prev, at70: true }))
-			triggerCardGeneration()
+		// Trigger generation at every 10% threshold
+		const thresholds = [
+			{ percent: 10, key: 'at10' as const },
+			{ percent: 20, key: 'at20' as const },
+			{ percent: 30, key: 'at30' as const },
+			{ percent: 40, key: 'at40' as const },
+			{ percent: 50, key: 'at50' as const },
+			{ percent: 60, key: 'at60' as const },
+			{ percent: 70, key: 'at70' as const },
+			{ percent: 80, key: 'at80' as const },
+			{ percent: 90, key: 'at90' as const },
+			{ percent: 100, key: 'at100' as const },
+		]
+
+		for (const { percent, key } of thresholds) {
+			if (progressPercent >= percent && !generationTriggered[key]) {
+				setGenerationTriggered(prev => ({ ...prev, [key]: true }))
+				triggerCardGeneration()
+				break // Only trigger one at a time
+			}
 		}
 	}, [timeRemaining, sessionEnded, sessionDuration, generationTriggered, triggerCardGeneration])
 
